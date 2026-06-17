@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "koyanagi-plugins",
+  "description": "ayuha.koyanagi のプラグインコレクション",
+  "owner": {
+    "name": "ayuha.koyanagi",
+    "email": "ayuha.koyanagi@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "team-framework",
+      "source": "./plugins/team-framework",
+      "description": "関数ベース×ハイブリッド（前半Teams＋後半Workflow）のマルチエージェント開発体制（Orchestrator/Planner/Worker/Critic）"
+    }
+  ]
+}
