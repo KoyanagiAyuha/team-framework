@@ -1,0 +1,13 @@
+# 環境変数・秘匿情報
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# 一時ファイル
+tmp/
