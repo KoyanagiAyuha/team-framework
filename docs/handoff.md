@@ -49,14 +49,24 @@
 ### フェーズ計画と進捗
 - **フェーズ0（de-risk）= ✅ 完了**: 実測結果は `TEST.md` 末尾に記録。**A-2＝NG（workflowはname解決不可→scriptPath方式に確定）／B＝OK（名前空間teammate spawn可）／C＝OK（`/team-framework:team`）**。コミット `aa96e5f`。
 - **フェーズ1（本移行）= ✅ 完了（コミット `d923102`）**: agents（planner/worker/critic）/ skills（team/tool-recover）/ instructions（workflow/rules）/ workflow をプラグインへ移植。**scriptPath方式・worktree隔離・名前空間**すべて反映。SessionStart自己同期フック稼働。
-- **フェーズ2（仕分け）= 🔄 進行中**:
-  - 層1 グローバル `~/.claude/settings.json` ＝ ほぼ完成（Teams有効化/attribution/普遍permission 投入済み）。**`Bash(snow:*)` はドメイン固有なので層1から削除済み**（→ snow利用プロジェクトの層3 `.claude/settings.json` へ移す運用）。
+- **フェーズ2（仕分け）= ✅ 完了**:
+  - 層1 グローバル `~/.claude/settings.json` ＝ 完成（Teams有効化/attribution/普遍permission）。**`Bash(snow:*)` はドメイン固有なので層1から削除済み**（→ snow利用プロジェクトの層3 `.claude/settings.json` へ移す運用）。
   - 層2 プラグイン ＝ フェーズ1で完了。
   - 層3 プロジェクトローカル ＝ 各consumerプロジェクトで都度（dashboard/ドメインpermission/薄いCLAUDE.md）。手順は `docs/setup.md` に記載。
+- **フェーズ1通し統合テスト（本番アセット）= ✅ 全OK**: T1〜T6 を新セッションで実測（`TEST-phase1.md` 末尾）。Criticゲートの歯(T5)・worktree隔離(T6)も実証。worktree隔離の2前提（①セッション開始時点でgit repo ②最低1コミット）も確定しドキュメント反映済み（`5695de7`）。
+- **フェーズ3（配布・道A）= ✅ 完了**:
+  - GitHubリポジトリ: **`KoyanagiAyuha/team-framework`（private・個人アカウント）**。remoteはSSH（git@github.com）。
+  - **marketplace同居構成**にリストラ済み（`change: b193438`）: プラグイン本体を `plugins/team-framework/` へ移動、root に `.claude-plugin/marketplace.json`（marketplace名 `koyanagi-plugins`、`source: ./plugins/team-framework`）。
+  - install手順（consumer）: `/plugin marketplace add KoyanagiAyuha/team-framework` → `/plugin install team-framework@koyanagi-plugins`。詳細は `docs/setup.md`。
+  - 残: **marketplace経由installの実機検証は未実施**（新セッションで `/plugin marketplace add`→`install` を試す）。version は plugin.json で `0.0.1` のまま（bumpは任意）。
 
 ### 成果物の場所
-- 検証プラグイン: `/Users/ayuhakoyanagi/Desktop/workspace/team-framework/`（手順は同ディレクトリ `TEST.md`）
-- 移行元の現行実装: 本プロジェクト `.claude/`（agents/skills/workflows/instructions/CLAUDE.md）
+- 配布プラグイン（開発ホーム）: `/Users/ayuhakoyanagi/Desktop/workspace/team-framework/`
+  - プラグイン本体＝ `plugins/team-framework/`（agents/skills/instructions/workflows/hooks/.claude-plugin/plugin.json）
+  - marketplace定義＝ root `.claude-plugin/marketplace.json`
+  - 開発時のローカル起動は `--plugin-dir .../team-framework/plugins/team-framework`（rootではなくプラグインサブディレクトリ）
+- テスト記録: `TEST.md`（フェーズ0）/ `TEST-phase1.md`（フェーズ1通し）※install行のパスは旧root基準のまま＝現行は `docs/setup.md` が正
+- 移行元（温存）: ワークスペースの旧フォルダ `部長、課長、平社員、顧問/`（捨てず保留＝ユーザー判断(c)）
 
 データ系などの特化は「骨組みを1つ維持し、Worker層だけ専門化（例 worker-data）」で対応。骨組みを丸ごとフォークしない。
 
