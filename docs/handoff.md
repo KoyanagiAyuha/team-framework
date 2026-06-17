@@ -28,7 +28,8 @@
 - **Workflowの `args` はこの環境では文字列で届く**（公式docは「構造化データ＝parse不要」と言うが実機は string）。→ スクリプト側のJSON.parseガードは必須。
 - **Workflowツールはユーザーの明示依頼でのみ起動**（勝手に走らせない）。
 - **新agent typeは新規セッションから有効**。
-- **スコープ逸脱の既知問題**: 通しテストで Worker が `package.json`/`tsconfig.json` を**プロジェクトルートに作成**（スコープ外汚染）。掃除済みだが、対策候補＝**後半Workerを worktree 隔離で走らせる**（`agent(..., { isolation: 'worktree' })`）。
+- **スコープ逸脱の既知問題**: 通しテストで Worker が `package.json`/`tsconfig.json` を**プロジェクトルートに作成**（スコープ外汚染）。→ フェーズ1で **worktree隔離（`worktree:true`）を worker-critic.mjs に組込み済み**・T6で機能確認。
+- **worktree隔離の2前提（実測で確定）**: ①**セッション開始時点でgit repoであること**（ハーネスがgit判定をセッション開始時に固定するため、途中の `git init` は拾われず `Cannot create agent worktree...` で失敗）、②**最低1コミット**（unborn HEADだと `Failed to resolve base branch "HEAD"`）。両前提は worker-critic.mjs のログ/失敗ヒント＋skill/plannerに明記済み（`5695de7`）。
 
 ## 次にやること（＝グローバル/プラグイン化。着手済み・フェーズ0準備完了）
 
