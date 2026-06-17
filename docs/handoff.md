@@ -58,7 +58,9 @@
   - GitHubリポジトリ: **`KoyanagiAyuha/team-framework`（private・個人アカウント）**。remoteはSSH（git@github.com）。
   - **marketplace同居構成**にリストラ済み（`change: b193438`）: プラグイン本体を `plugins/team-framework/` へ移動、root に `.claude-plugin/marketplace.json`（marketplace名 `koyanagi-plugins`、`source: ./plugins/team-framework`）。
   - install手順（consumer）: `/plugin marketplace add KoyanagiAyuha/team-framework` → `/plugin install team-framework@koyanagi-plugins`。詳細は `docs/setup.md`。
-  - 残: **marketplace経由installの実機検証は未実施**（新セッションで `/plugin marketplace add`→`install` を試す）。version は plugin.json で `0.0.1` のまま（bumpは任意）。
+  - **marketplace経由installの実機検証 = ✅ 完了（2026-06-17）**: privateリポジトリをSSH(`git@github.com:...`)でclone → user scopeでinstall → `--plugin-dir`なしの新セッションで①SessionStart自己同期 ②`team-framework:planner` teammate spawn ③`/team-framework:team` skill起動 の3点すべて動作。配布導線が完全確定。
+  - 補足: `/plugin marketplace add` でSSH URL指定は成功（settings.json `extraKnownMarketplaces` に登録）。owner/repo短縮形はHTTPSになりがちで複数アカウント環境では会社側に解決され得るため、private＋複数アカウントではSSH URLが確実。
+  - version は plugin.json で `0.0.1` のまま（bumpは任意）。
 
 ### 成果物の場所
 - 配布プラグイン（開発ホーム）: `/Users/ayuhakoyanagi/Desktop/workspace/team-framework/`
