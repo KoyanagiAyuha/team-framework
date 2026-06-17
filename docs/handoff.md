@@ -45,10 +45,13 @@
 - **A**: `${CLAUDE_PLUGIN_ROOT}` は **skill本文では展開されない**（hooks/MCP/LSP/monitorsのJSONのみ）。→ workflowはプラグイン同梱scriptPath参照は不可。**解決策＝SessionStartフックで `~/.claude/workflows/` に自己同期**し `Workflow({name})` で名前解決（フックのcommand文字列なら`${CLAUDE_PLUGIN_ROOT}`が効く）。
 - **B**: プラグインのagent/skillは**名前空間必須**（`team-framework:planner` / `/team-framework:team`）。bare名では解決しない。teammateとして使えるとは公式に明記あるが、**名前空間付き名でのteammate spawn解決は未文書 → 実測が必要**。
 
-### フェーズ計画
-- **フェーズ0（de-risk・準備完了／実測待ち）**: 最小検証プラグイン `team-framework/` を作成済み。`TEST.md` の手順を**新セッションで**実行し、A（自己同期＋名前解決）/ B（名前空間teammate spawn）/ C（skillスラッシュ名）を実測。**Bが分岐点**: ✅→フェーズ1、❌→「agentsだけグローバル（bare名）に残す折衷」へ再設計。
-- **フェーズ1（本移行）**: agents/skills/instructions をプラグインへ移し名前空間化反映、SKILL.md自己完結化、CLAUDE.md縮小、workflowにworktree隔離組込み＋SessionStartフック自己同期。
-- **フェーズ2（仕分け）**: グローバルsettings / プロジェクトローカルの薄い構成。
+### フェーズ計画と進捗
+- **フェーズ0（de-risk）= ✅ 完了**: 実測結果は `TEST.md` 末尾に記録。**A-2＝NG（workflowはname解決不可→scriptPath方式に確定）／B＝OK（名前空間teammate spawn可）／C＝OK（`/team-framework:team`）**。コミット `aa96e5f`。
+- **フェーズ1（本移行）= ✅ 完了（コミット `d923102`）**: agents（planner/worker/critic）/ skills（team/tool-recover）/ instructions（workflow/rules）/ workflow をプラグインへ移植。**scriptPath方式・worktree隔離・名前空間**すべて反映。SessionStart自己同期フック稼働。
+- **フェーズ2（仕分け）= 🔄 進行中**:
+  - 層1 グローバル `~/.claude/settings.json` ＝ ほぼ完成（Teams有効化/attribution/普遍permission 投入済み）。**`Bash(snow:*)` はドメイン固有なので層1から削除済み**（→ snow利用プロジェクトの層3 `.claude/settings.json` へ移す運用）。
+  - 層2 プラグイン ＝ フェーズ1で完了。
+  - 層3 プロジェクトローカル ＝ 各consumerプロジェクトで都度（dashboard/ドメインpermission/薄いCLAUDE.md）。手順は `docs/setup.md` に記載。
 
 ### 成果物の場所
 - 検証プラグイン: `/Users/ayuhakoyanagi/Desktop/workspace/team-framework/`（手順は同ディレクトリ `TEST.md`）
