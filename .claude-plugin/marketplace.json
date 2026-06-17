@@ -3,8 +3,7 @@
   "name": "koyanagi-plugins",
   "description": "ayuha.koyanagi のプラグインコレクション",
   "owner": {
-    "name": "ayuha.koyanagi",
-    "email": "ayuha.koyanagi@gmail.com"
+    "name": "ayuha.koyanagi"
   },
   "plugins": [
     {
