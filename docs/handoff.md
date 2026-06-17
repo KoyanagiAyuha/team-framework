@@ -55,7 +55,7 @@
   - 層3 プロジェクトローカル ＝ 各consumerプロジェクトで都度（dashboard/ドメインpermission/薄いCLAUDE.md）。手順は `docs/setup.md` に記載。
 - **フェーズ1通し統合テスト（本番アセット）= ✅ 全OK**: T1〜T6 を新セッションで実測（`TEST-phase1.md` 末尾）。Criticゲートの歯(T5)・worktree隔離(T6)も実証。worktree隔離の2前提（①セッション開始時点でgit repo ②最低1コミット）も確定しドキュメント反映済み（`5695de7`）。
 - **フェーズ3（配布・道A）= ✅ 完了**:
-  - GitHubリポジトリ: **`KoyanagiAyuha/team-framework`（private・個人アカウント）**。remoteはSSH（git@github.com）。
+  - GitHubリポジトリ: **`KoyanagiAyuha/team-framework`（個人アカウント。当初privateで作成→2026-06-17 にpublic化）**。remoteはSSH（git@github.com）。public化に伴い consumer は owner/repo 短縮形で認証不要install可。marketplace.json owner の個人メールはpublic前に削除済み。
   - **marketplace同居構成**にリストラ済み（`change: b193438`）: プラグイン本体を `plugins/team-framework/` へ移動、root に `.claude-plugin/marketplace.json`（marketplace名 `koyanagi-plugins`、`source: ./plugins/team-framework`）。
   - install手順（consumer）: `/plugin marketplace add KoyanagiAyuha/team-framework` → `/plugin install team-framework@koyanagi-plugins`。詳細は `docs/setup.md`。
   - **marketplace経由installの実機検証 = ✅ 完了（2026-06-17）**: privateリポジトリをSSH(`git@github.com:...`)でclone → user scopeでinstall → `--plugin-dir`なしの新セッションで①SessionStart自己同期 ②`team-framework:planner` teammate spawn ③`/team-framework:team` skill起動 の3点すべて動作。配布導線が完全確定。
