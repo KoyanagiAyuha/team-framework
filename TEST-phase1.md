@@ -102,14 +102,36 @@ T1〜T6 の結果をこのファイル末尾に追記し、本セッションへ
 
 ---
 
-## 結果（実測：____）
+## 結果（実測：2026-06-17）
 
-### T1 SessionStart自己同期（本物）→ 
-### T2 skill名前空間起動 → 
-### T3 名前空間teammate spawn（本番agents）→ 
-### T4 後半パイプライン scriptPath実行 → 
-### T5 Criticゲートの歯（最重要）→ 
-### T6 worktree隔離 → 
+### T1 SessionStart自己同期（本物）→ **OK**
+- `~/.claude/workflows/worker-critic.mjs` = **7474B**（≫705Bスタブ）。`grep -c "pipeline(" ` = **1**。
+- SessionStartフックのログ `[team-framework] synced worker-critic.mjs from .../team-framework` も確認。本物に更新済み。
+
+### T2 skill名前空間起動 → **OK（仕様どおり、ただしユーザー起動のみ）**
+- skillは名前空間 `team-framework:team` として正しくregist解決された。中身は本物のOrchestrator体制skill（体制図・起動方式・ハイブリッド手順）であることを `skills/team/SKILL.md` で確認。
+- ただし frontmatter に `disable-model-invocation: true` があるため、**モデル（Claude）からは起動不可**。`/team-framework:team` をユーザーが入力したときのみ起動する設計。これは意図された挙動。
+
+### T3 名前空間teammate spawn（本番agents）→ **OK**
+- `team-framework:planner` / `team-framework:worker` / `team-framework:critic` の3体をすべて**チームメイト**としてspawn成功（Agentサブエージェントではなく、SendMessage可・mailbox経由）。
+- 各自が認知機能で自己定義：Planner=「タスク分解・実行計画の立案、自らは実装しない」、Worker=「L1〜L3の実装・調査の実行部隊」、Critic=「実コード・実挙動で裏取りする検証ゲート」。役者は揃った。
+
+### T4 後半パイプライン scriptPath実行 → **OK**
+- `Workflow({ scriptPath: "~/.claude/workflows/worker-critic.mjs", args: ... })` でWorker→Criticの2ステージが流れ、戻り値に `passed/flagged/failed` 構造を確認（`passed:[t1]`）。
+- `./tmp/calc.ts` が実際に生成（add/multiply 正実装）。サブエージェントtranscriptで Critic が `tmp/calc.ts` を **Read** した証跡を確認 → ファイル根拠で合格判定。
+
+### T5 Criticゲートの歯（最重要）→ **OK（ゲート機能あり）**
+- 初回はWorkerが指示に反し正コード（`n % 2 === 0`）を書いたためバグが混入せず**検証不成立**。バグを確実に残す形（バグ入りファイルを先置き＋ロジック変更禁止＋Workerに「正しく動作する」と虚偽申告させる）で再実行。
+- Critic は `tmp/buggy.ts` を Read し **`ok:false`（failed）** を返却。実測挙動 `isEven(2)=false / isEven(3)=true / isEven(0)=false` を根拠に論理誤り（`n % 2 === 1`）を指摘し、Workerの自己申告を「実測と矛盾＝虚偽」と明示的に却下。自己申告を鵜呑みにしない関門が効いている。
+
+### T6 worktree隔離 → **OK（前提条件の注意あり）**
+- 初回は `Failed to resolve base branch "HEAD"` で即失敗。原因は**test repoにコミットが0件（unborn HEAD）**で、worktreeをHEADから分岐できないため。隔離ロジックのバグではなく前提条件（**git repoに最低1コミット必要**）。
+- 空の初期コミットを作成し再実行 → 成果物が `.claude/worktrees/wf_413dfe2e-2ea-1/tmp/calc6.ts` ＝**隔離worktree内**に書かれ、**mainルートに `tmp/calc6.ts` は出現せず**。ルートに想定外生成物（package.json等）なし。スコープ外汚染対策が物理的に機能。
+- 注: 変更のある隔離worktreeは自動削除されず残存する（後片付けで `git worktree remove` が必要）。
 
 ### 所見 / 次アクション
-- 
+- **T1〜T6 全OK → プラグイン実用可能を確定**。Critic検証ゲートの「歯」（T5）も実証済み。次は配布導線（GitHub remote / `/plugin` install）へ進めてよい。
+- 改善候補1（worker-critic.mjs / skill）: `worktree:true` 時、**コミットの無いrepo（unborn HEAD）を事前検出**し、分かりやすいエラー or 自動で空コミットへフォールバックすると親切（T6の初回失敗を回避できる）。
+- 改善候補2（運用）: 変更済み隔離worktreeは残存するため、Workflow側でクリーンアップ手順／案内を持たせると後片付けが楽。
+- 検証手順の学び（T5）: 「Workerにバグを書かせる」指示はWorkerが善意で正しく直してしまうことがある。ゲートの歯を試すなら**バグ入りファイルを先置きし、ロジック変更を禁じる**のが確実。
+- 後片付け済み: 隔離worktree除去・`tmp/` 内テスト生成物削除・`.claude/worktrees` 削除。**唯一 T6用の空コミット `1af6a6b` のみ残置**（元はコミット0件。削除（unborn復帰）はユーザー確認待ち）。
