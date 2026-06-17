@@ -59,15 +59,16 @@ if (!worklist.tasks || worklist.tasks.length === 0) {
 
 // ---- Worker隔離オプション（git管理下で worktree:true のときだけ発火）----
 // worktree隔離はgitリポジトリでのみ機能する。非git環境では付けない（呼び出し側が判断して worktree を渡す）。
-// 【前提】worktree隔離は HEAD から分岐するため、リポジトリに最低1コミットが必要。
-//   コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` でWorker起動に失敗する。
-//   このスクリプトはサンドボックスでgitを実行できないため、検出は呼び出し側(Orchestrator/Planner)の責務:
-//   worktree:true を渡す前に `git rev-parse HEAD` で確認し、未コミットなら `git commit --allow-empty -m init` 等で
-//   最初のコミットを作ってから起動すること（skill/planner参照）。
+// 【前提1：セッション開始時点でgit repoであること】ハーネスのworktree機構はgit判定をセッション開始時に固定する。
+//   非gitディレクトリで起動したセッションは、途中で `git init` しても隔離worktreeを作れない
+//   （`Cannot create agent worktree: not in a git repository`）。→ git管理下のプロジェクトでセッションを開始すること。
+// 【前提2：最低1コミット（unborn HEAD不可）】worktreeは HEAD から分岐するため、コミット0件だと
+//   `Failed to resolve base branch "HEAD"` で失敗する。未コミットなら起動前に `git commit --allow-empty -m init`。
+//   このスクリプトはサンドボックスでgitを実行できないため、両前提の確認は呼び出し側(Orchestrator/Planner)の責務（skill/planner参照）。
 // 【後片付け】変更のある隔離worktreeは自動削除されない。完了後 `git worktree remove <path>` が要る（戻り値 noteで案内）。
 const isoOpt = worklist.worktree ? { isolation: 'worktree' } : {}
 if (worklist.worktree) {
-  log('worktree隔離ON: リポジトリに最低1コミットが必要（unborn HEADだとWorker起動に失敗）。完了後は変更済みworktreeの手動削除が要る場合あり。')
+  log('worktree隔離ON: 前提=①セッション開始時点でgit repo（途中のgit initは無効）②最低1コミット（unborn HEAD不可）。完了後は変更済みworktreeの手動削除が要る場合あり。')
 }
 
 // ---- 構造化スキーマ（戻り値を検証付きで受け取る）----
@@ -155,6 +156,9 @@ return {
     : {}),
   // worktree生成失敗が疑われる場合のヒント
   ...(droppedAll
-    ? { error: 'worktree-setup-failed?', hint: 'リポジトリに最低1コミットが必要（unborn HEAD）。`git commit --allow-empty -m init` 後に再実行。' }
+    ? {
+        error: 'worktree-setup-failed?',
+        hint: 'worktree隔離の前提を確認: ①セッション開始時点でgit repoであること（非gitで起動したセッションは途中の `git init` を拾わない→git管理下で起動し直す）②最低1コミット（unborn HEADなら `git commit --allow-empty -m init` 後に再実行）。',
+      }
     : {}),
 }

@@ -137,7 +137,8 @@ worklist の契約（前半が満たす）:
 ```
 - `files` をtasks間で重複させない（競合回避）
 - **git管理下のプロジェクトでは `worktree: true`** を付けるとWorkerをworktree隔離で走らせ、スコープ外汚染・並列競合を物理的に防ぐ。非git環境では `false`（または省略）
-- **【worktree:true の前提】リポジトリに最低1コミットが必要。** worktreeはHEADから分岐するため、コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` で失敗する。起動前に確認し、未コミットなら先に1コミット作る:
+- **【worktree:true の前提①】セッション開始時点で git repo であること。** ハーネスのworktree機構はgit判定をセッション開始時に固定するため、**非gitディレクトリで起動したセッションは途中で `git init` しても隔離worktreeを作れない**（`Cannot create agent worktree: not in a git repository`）。→ git管理下のプロジェクトでセッションを開始する。
+- **【worktree:true の前提②】リポジトリに最低1コミットが必要。** worktreeはHEADから分岐するため、コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` で失敗する。起動前に確認し、未コミットなら先に1コミット作る:
   ```bash
   git rev-parse HEAD >/dev/null 2>&1 || git commit --allow-empty -m "init"
   ```
