@@ -87,7 +87,7 @@ Workerのデフォルトはsonnet。以下のいずれかに該当する**複雑
 
 ### worklist（後半パイプライン worker-critic.mjs の入力）
 
-後半は `Workflow({ scriptPath })` 方式で起動する（起動の詳細は team skill 参照）。`files` をtasks間で重複させないこと。git管理下のプロジェクトでは `worktree: true` を付けるとWorkerをworktree隔離で走らせ、スコープ外汚染と並列競合を防げる。
+後半は `Workflow({ scriptPath })` 方式で起動する（起動の詳細は team skill 参照）。`files` をtasks間で重複させないこと。git管理下のプロジェクトでは `worktree: true` を付けるとWorkerをworktree隔離で走らせ、スコープ外汚染と並列競合を防げる。**ただし worktree:true はリポジトリに最低1コミットが必要**（unborn HEADだと失敗）。未コミットなら先に `git commit --allow-empty -m "init"`。後片付け（`git worktree remove`）も含め詳細は team skill 参照。
 
 ```json
 {

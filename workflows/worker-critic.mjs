@@ -59,7 +59,16 @@ if (!worklist.tasks || worklist.tasks.length === 0) {
 
 // ---- Worker隔離オプション（git管理下で worktree:true のときだけ発火）----
 // worktree隔離はgitリポジトリでのみ機能する。非git環境では付けない（呼び出し側が判断して worktree を渡す）。
+// 【前提】worktree隔離は HEAD から分岐するため、リポジトリに最低1コミットが必要。
+//   コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` でWorker起動に失敗する。
+//   このスクリプトはサンドボックスでgitを実行できないため、検出は呼び出し側(Orchestrator/Planner)の責務:
+//   worktree:true を渡す前に `git rev-parse HEAD` で確認し、未コミットなら `git commit --allow-empty -m init` 等で
+//   最初のコミットを作ってから起動すること（skill/planner参照）。
+// 【後片付け】変更のある隔離worktreeは自動削除されない。完了後 `git worktree remove <path>` が要る（戻り値 noteで案内）。
 const isoOpt = worklist.worktree ? { isolation: 'worktree' } : {}
+if (worklist.worktree) {
+  log('worktree隔離ON: リポジトリに最低1コミットが必要（unborn HEADだとWorker起動に失敗）。完了後は変更済みworktreeの手動削除が要る場合あり。')
+}
 
 // ---- 構造化スキーマ（戻り値を検証付きで受け取る）----
 const OUTPUT = {
@@ -130,8 +139,22 @@ const failed = valid.filter((r) => !r.verdict?.ok && !r.verdict?.needsRedesign)
 
 log(`合格 ${passed.length} / 要再計画 ${flagged.length} / 不合格 ${failed.length}`)
 
+// worktree:true で全itemが落ちた（valid=0）なら、worktree生成失敗の可能性が高い（unborn HEAD等）。
+const droppedAll = !!worklist.worktree && valid.length === 0 && worklist.tasks.length > 0
+if (droppedAll) {
+  log('⚠ 全タスクが落ちた。worktree隔離の生成失敗の可能性大（リポジトリにコミットが無い=unborn HEAD等）。最低1コミットを作ってから再実行を。')
+}
+
 return {
   passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles })),
   flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues })),
   failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary })),
+  // worktree使用時の後片付け案内
+  ...(worklist.worktree
+    ? { note: '隔離worktreeは変更があると自動削除されない。完了後 `git worktree remove <path>` で掃除すること。' }
+    : {}),
+  // worktree生成失敗が疑われる場合のヒント
+  ...(droppedAll
+    ? { error: 'worktree-setup-failed?', hint: 'リポジトリに最低1コミットが必要（unborn HEAD）。`git commit --allow-empty -m init` 後に再実行。' }
+    : {}),
 }
