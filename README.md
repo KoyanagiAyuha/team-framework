@@ -1,14 +1,14 @@
 # team-framework
 
-関数ベース × ハイブリッドの**マルチエージェント開発フレームワーク**を、Claude Code プラグインとして配布するリポジトリ。
+**マルチエージェント開発フレームワーク**を Claude Code プラグインとして配布するリポジトリ。
 
-肩書き（部長/課長…）ではなく**認知機能で役割を定義**し、前半は動的な **Agent Teams**、後半は決定論的な **Workflow** で回すハイブリッド構成。Critic が実コード・実挙動で裏取りする**検証ゲート**を必ず通すのが肝。
+エージェントの役割を**認知機能で定義**（誰が何を考えるか）し、前半は動的な **Agent Teams** で理解・分解・設計相談、後半は決定論的な **Workflow** で実装・検証を回す**ハイブリッド構成**。実装の成果は Critic が実コード・実挙動で裏取りする**検証ゲート**を必ず通す（自己申告では完了にしない）のが肝。
 
-## 役割（関数ベース）
+## 役割
 
 | 役割 | 機能 | 実体 |
 |---|---|---|
-| Engineer | 外部オペレーター（human-in-the-loop）。階層の頂点ではない | 人間（あなた） |
+| Engineer | 指示と判断を出す外部オペレーター（human-in-the-loop） | 人間（あなた） |
 | Orchestrator | 全体統括・軽い分解・進捗管理 | main session |
 | Planner | 重い分解・実行計画（軽い分解なら立てない） | teammate `team-framework:planner` |
 | Worker | 隔離コンテキストで並列実装 | teammate / Workflow `team-framework:worker` |
@@ -74,7 +74,7 @@ team-framework/
 │   ├── .claude-plugin/plugin.json
 │   ├── agents/                       planner / worker / critic
 │   ├── skills/                       team / tool-recover
-│   ├── instructions/                 workflow.md / rules.md（O/P/W/C体系）
+│   ├── instructions/                 workflow.md（通信・並列規約）/ rules.md（共通ルール・禁止行為）
 │   ├── workflows/                    worker-critic.mjs（後半パイプライン）
 │   └── hooks/                        hooks.json（SessionStart自己同期）
 ├── docs/                             setup.md（consumer手順）/ handoff.md（設計・経緯）
