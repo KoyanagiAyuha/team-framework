@@ -60,10 +60,10 @@
   - install手順（consumer）: `/plugin marketplace add KoyanagiAyuha/team-framework` → `/plugin install team-framework@koyanagi-plugins`。詳細は `docs/setup.md`。
   - **marketplace経由installの実機検証 = ✅ 完了（2026-06-17）**: privateリポジトリをSSH(`git@github.com:...`)でclone → user scopeでinstall → `--plugin-dir`なしの新セッションで①SessionStart自己同期 ②`team-framework:planner` teammate spawn ③`/team-framework:team` skill起動 の3点すべて動作。配布導線が完全確定。
   - 補足: `/plugin marketplace add` でSSH URL指定は成功（settings.json `extraKnownMarketplaces` に登録）。owner/repo短縮形はHTTPSになりがちで複数アカウント環境では会社側に解決され得るため、private＋複数アカウントではSSH URLが確実。
-  - version は plugin.json で `0.0.1` のまま（bumpは任意）。
+  - version は plugin.json で `0.1.0`（`0.0.1`からbump済み。homepage/repository/keywords追記）。README整備済み。
 
 ### 成果物の場所
-- 配布プラグイン（開発ホーム）: `/Users/ayuhakoyanagi/Desktop/workspace/team-framework/`
+- 配布プラグイン（開発ホーム）: `/path/to/team-framework/`
   - プラグイン本体＝ `plugins/team-framework/`（agents/skills/instructions/workflows/hooks/.claude-plugin/plugin.json）
   - marketplace定義＝ root `.claude-plugin/marketplace.json`
   - 開発時のローカル起動は `--plugin-dir .../team-framework/plugins/team-framework`（rootではなくプラグインサブディレクトリ）

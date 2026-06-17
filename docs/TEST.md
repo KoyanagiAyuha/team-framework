@@ -7,7 +7,7 @@
 
 ```bash
 # A) ローカルディレクトリから読み込んで起動
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --plugin-dir /Users/ayuhakoyanagi/Desktop/workspace/team-framework
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --plugin-dir /path/to/team-framework
 
 # B) すでに起動中なら（v2.1.128+）
 /plugin            # メニューからローカルプラグインを追加 → /reload-plugins

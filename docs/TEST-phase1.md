@@ -7,7 +7,7 @@
 
 ```bash
 # ローカルディレクトリから読み込んで起動
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --plugin-dir /Users/ayuhakoyanagi/Desktop/workspace/team-framework
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --plugin-dir /path/to/team-framework
 ```
 
 > 既に起動中のセッションで気づいた場合は不可。一度終了して上記で入り直す。

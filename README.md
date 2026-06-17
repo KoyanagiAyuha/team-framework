@@ -76,8 +76,7 @@ team-framework/
 │   ├── instructions/                 workflow.md（通信・並列規約）/ rules.md（共通ルール・禁止行為）
 │   ├── workflows/                    worker-critic.mjs（後半パイプライン）
 │   └── hooks/                        hooks.json（SessionStart自己同期）
-├── docs/                             setup.md（consumer手順）/ handoff.md（設計・経緯）
-├── TEST.md / TEST-phase1.md          検証記録
+├── docs/                             setup.md（consumer手順）/ handoff.md（設計・経緯）/ TEST*.md（検証記録）
 └── README.md
 ```
 
