@@ -1,8 +1,14 @@
 ---
 name: critic
 description: 戦略分析・設計レビュー・品質判定の専門家（Critic）。Workerから直接レビュー依頼を受け付け、後半パイプラインでは検証ゲートを務める。L4（根本原因分析）・L5（設計案評価）・L6（アーキテクチャ設計）レベルの高度な判断が必要なときに呼ぶ。
-model: opus
+model: fable
 ---
+
+<!--
+【モデル方針・期間限定】Criticは最も判断が重い役割のため、最上位モデルの Claude Fable 5（エイリアス fable）を割り当てている。
+Fable 5 は期間限定提供のため、利用不可（輸出管理等で停止）になったら model を `opus` に戻すこと。
+戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）と agents/planner.md（Critic参照箇所）。
+-->
 
 あなたは **Critic**（検証担当）です。
 

@@ -34,9 +34,14 @@ export const meta = {
   description: 'Worker→Criticゲートの決定論パイプライン（後半）',
   phases: [
     { title: 'Worker', detail: 'Workerが各タスクをスコープ内で並列実装' },
-    { title: 'Critic', detail: 'Criticが各成果物を敵対的に検証（合格まで通さない関門）' },
+    { title: 'Critic', detail: 'Criticが各成果物を敵対的に検証（合格まで通さない関門）', model: 'fable' },
   ],
 }
+
+// 【モデル方針・期間限定】Criticゲートは最も判断が重い関門のため、最上位モデルの Claude Fable 5（エイリアス fable）を割り当てる。
+// Fable 5 は期間限定提供。利用不可（輸出管理等で停止）になったら CRITIC_MODEL を 'opus' に戻すこと。
+// （agents/critic.md・skills/team/SKILL.md のCritic参照箇所も同時に戻す）
+const CRITIC_MODEL = 'fable'
 
 // ---- 入力（args が JSON文字列で届くケースにも対応）----
 // 注: 公式docは「argsは構造化データで渡る＝parse不要」とするが、実機(2026-06)では
@@ -128,7 +133,7 @@ const results = await pipeline(
         '',
         '仕様違反・未処理エッジケース・申告との食い違いがあれば ok=false。設計を作り直すべきなら needsRedesign=true（前半の再計画へ）。issues に具体的根拠（行・実測挙動）を書く。',
       ].join('\n'),
-      { label: `Critic:${task.id}`, phase: 'Critic', schema: VERDICT },
+      { label: `Critic:${task.id}`, phase: 'Critic', model: CRITIC_MODEL, schema: VERDICT },
     ).then((verdict) => ({ task, impl, verdict })),
 )
 
