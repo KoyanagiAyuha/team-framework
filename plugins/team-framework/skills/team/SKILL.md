@@ -149,6 +149,7 @@ worklist の契約（前半が満たす）:
   ```bash
   git rev-parse HEAD >/dev/null 2>&1 || git commit --allow-empty -m "init"
   ```
+- **【worktree:true の落とし穴・実機確認済み】** 隔離worktreeは「git status上で変更があるとき」だけ保持される。タスクの成果物が **`.gitignore` 対象のパス（例: `tmp/`）だと git は「変更なし」と見なし、worktreeごと自動削除されて成果が消える**（収集役/Criticも参照できず不合格になる）。worktree:true で回すタスクの成果物は **git 管理対象のパス**に置くこと（gitignore配下に出すなら worktree:false で回す）。
 - **【worktree:true の後片付け】** 変更のある隔離worktreeは自動削除されない。完了後に掃除する（戻り値の `note` でも案内される）:
   ```bash
   git worktree list   # 残存worktreeを確認

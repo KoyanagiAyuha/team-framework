@@ -93,6 +93,9 @@ if (!worklist.tasks || worklist.tasks.length === 0) {
 //   `Failed to resolve base branch "HEAD"` で失敗する。未コミットなら起動前に `git commit --allow-empty -m init`。
 //   このスクリプトはサンドボックスでgitを実行できないため、両前提の確認は呼び出し側(Orchestrator/Planner)の責務（skill/planner参照）。
 // 【後片付け】変更のある隔離worktreeは自動削除されない。完了後 `git worktree remove <path>` が要る（戻り値 noteで案内）。
+// 【落とし穴・実機確認済み】隔離worktreeは「git status上で変更があるとき」だけ保持される。成果物が .gitignore 対象
+//   （例: tmp/）だと git は「変更なし」と見なして worktree ごと自動削除し、収集役/Criticが参照できず全て消える。
+//   worktree:true で回すタスクの成果物は git 管理対象のパスに置くこと（gitignore配下に出すなら worktree:false）。
 //
 // 【重要・worktree時の証拠参照先】Worker は自分専用の隔離worktree内で変更する。後続の収集役・Critic は
 //   隔離を付けず（＝別worktreeを新規作成しないよう isoOpt を渡さない）、Worker が申告した worktreeRoot を
