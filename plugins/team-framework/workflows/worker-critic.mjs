@@ -268,19 +268,20 @@ const results = await pipeline(
       ? '⚠ 収集役の証拠が取得できなかった（収集役が失敗した可能性）。テスト/型検査の結果は不明。的を絞った確認を自分で最小限実行し、確証が持てなければ confidence を下げること。'
       : evidenceText || '(テスト/型検査の実行なし＝該当コマンドが見つからなかった)'
 
-    // Critic の Read 対象は「収集役が git status で機械的に取った実変更リスト(actualChangedFiles)」を正とする。
-    // Worker の自己申告(changedFiles)は申告漏れがあり得るため、evidence があるときは actualChangedFiles を使い、
-    // 無い（収集役落ち）ときだけ changedFiles にフォールバックする（C-002: 自己申告を信用しない）。
-    const readTargets = evidence?.actualChangedFiles?.length ? evidence.actualChangedFiles : impl?.changedFiles || []
-    const readSourceNote = evidence?.actualChangedFiles?.length
-      ? '（git status 由来の実変更リスト。Worker申告ではないので申告漏れも含む。これを正として全部Readすること）'
-      : '（収集役の実変更リストが取れず Worker 申告で代用。申告漏れの可能性に注意）'
+    // Critic の Read 対象は「収集役が git status で機械的に取った実変更リスト(actualChangedFiles)」と
+    // 「Worker 申告(changedFiles)」の**和集合**とする。前者は申告漏れを拾い、後者にしか無いファイルは
+    // 「Workerが作ったと言うのに git に見えない」＝虚偽申告か git 外成果物のどちらかで、いずれも Critic が
+    // 見るべき情報。C-002 の趣旨は「申告を無視する」でなく「申告を裏取りする」なので union が原則に忠実。
+    const actual = evidence?.actualChangedFiles || []
+    const claimed = impl?.changedFiles || []
+    const readTargets = [...new Set([...actual, ...claimed])]
+    const readSourceNote = '（git status 由来の実変更リストと Worker 申告の和集合。申告にのみあるファイルは git に見えない＝虚偽申告か git 外成果物の可能性があるので特に注意して確認すること）'
 
     return agent(
       [
         'あなたは Critic。実装が仕様を満たすか合否判定せよ。判定は厳しめをデフォルトとし、指摘には改善案を添える。',
         rootHint(impl.worktreeRoot || ''),
-        '【最重要】Workerの自己申告（要約・申告した変更ファイル一覧）を信用するな。下記の検証対象ファイル（収集役が git から機械的に取った実変更リスト）を必ず Read し、コードを根拠に判定すること。',
+        '【最重要】Workerの自己申告（要約）を鵜呑みにするな。下記の検証対象ファイルを必ず Read し、コードを根拠に裏取りして判定すること。',
         '【テストは再実行しない】テスト/型検査は収集役が実行済み（下記の証拠を使う）。フルスイートの再実行はするな。文脈上どうしても要る場合のみ、的を絞ったコマンドを `| tail -40` 等のフィルタ付きで最小限実行してよい。',
         '観点: 機能性 / 既存パターンとの一貫性 / 秘密情報ハードコード等の安全性 / テスト / 型安全性(any禁止) / 過剰設計でないか。',
         '',
