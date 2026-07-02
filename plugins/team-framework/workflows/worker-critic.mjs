@@ -210,7 +210,7 @@ const results = await pipeline(
         'やること（判断せず機械的に）:',
         '1. `git status --porcelain` で実際に変更/追加されたファイルを列挙し actualChangedFiles に入れる。task.files に無いものは scopeViolations にも入れる。',
         '   ※ status がクリーンなのに Worker が変更を報告している場合は、Worker がコミットしてしまった可能性。`git log --oneline -5` を見て base からのコミットがあれば、その差分（`git diff <base>..HEAD --numstat` 等）で actualChangedFiles / totalNewLines を拾うこと。',
-        '2. totalNewLines には「このタスクの担当ファイル（上記の"許可されたファイル"）」の追加/新規行だけを数える。**作業ツリー全体の未コミットdiffで測ってはいけない**——他タスク由来や既存の未コミットの塊を巻き込むと、分割しても数値が縮まず粒度ゲートが空転する。task.files のパスに限定して数える（例: `git diff --numstat -- <許可されたファイルのパス...>` の追加行合計。新規ファイルは全行を `wc -l`。未追跡なら `git add -N -- <パス>` 後に numstat）。task.files が未指定のときだけ actualChangedFiles を対象にする。',
+        '2. totalNewLines には「このタスクの担当ファイル（上記の"許可されたファイル"）」の追加/新規行だけを数える。**作業ツリー全体の未コミットdiffで測ってはいけない**——他タスク由来や既存の未コミットの塊を巻き込むと、分割しても数値が縮まず粒度ゲートが空転する。task.files のパスに限定して数える（例: `git diff --numstat -- <許可されたファイルのパス...>` の追加行合計＋未追跡の新規ファイルは `wc -l` で全行を数える）。※ index を汚さないため `git add -N` は使わない（未追跡ファイルは wc -l で足りる）。task.files が未指定のときだけ actualChangedFiles を対象にする。',
         '3. プロジェクトの型検査とテストを実行する（package.jsonのscripts等から判断。例: tsc --noEmit、npm test、pytest 等。無ければ実行不要）。',
         '4. 各コマンドについて command と exitCode（生値。0=成功）を記録する。失敗（exit≠0）のときだけ failureExcerpt に「関連する失敗箇所」を抜粋する。',
         '',
@@ -244,10 +244,15 @@ const results = await pipeline(
 
     // 助言のしきい値（SOFT_REVIEW_LINES）超は差し戻さない。レビューは通常どおり回し、noteを添えるだけ。
     // 合否はあくまでコードの中身で判断させる（サイズを理由に落とさない）。
-    const sizeNote =
-      lines !== null && lines > SOFT_REVIEW_LINES
-        ? `参考: レビュー単位が大きめ（${lines}行 > 目安 ${SOFT_REVIEW_LINES}行）。ただし合否はコードの中身で判断すること——サイズだけを理由に不合格やneedsRedesignにしない。自然な継ぎ目があるなら issues で「次スライスで分割を検討」と助言してよい（凝集した単位を数字合わせで割らない）。`
-        : ''
+    const overSoft = lines !== null && lines > SOFT_REVIEW_LINES
+    // Criticプロンプト向け（指示文）: サイズを理由に落とさせない。
+    const sizeNoteForCritic = overSoft
+      ? `参考: レビュー単位が大きめ（${lines}行 > 目安 ${SOFT_REVIEW_LINES}行）。ただし合否はコードの中身で判断すること——サイズだけを理由に不合格やneedsRedesignにしない。自然な継ぎ目があるなら issues で「次スライスで分割を検討」と助言してよい（凝集した単位を数字合わせで割らない）。`
+      : ''
+    // Orchestrator向け（戻り値に載る短い事実文。指示文は混ぜない）。
+    const sizeNote = overSoft
+      ? `レビュー単位が大きめ（${lines}行 > 目安 ${SOFT_REVIEW_LINES}行）。自然な継ぎ目があれば次スライスで分割を検討。`
+      : ''
 
     // 証拠のテスト結果を Critic 向けに整形（生出力は既に収集役が圧縮済み。ここでも合計上限で防御的に切る）。
     let evidenceText = (evidence?.tests || [])
@@ -275,7 +280,7 @@ const results = await pipeline(
         `変更ファイル（必ず Read して中身を確認）: ${(impl?.changedFiles || []).join(', ') || '(なし＝実装失敗の可能性)'}`,
         `Workerの自己申告（参考。鵜呑みにしない）: ${impl?.summary ?? '(取得不可)'}`,
         scopeNote,
-        sizeNote,
+        sizeNoteForCritic,
         '',
         '収集役が集めた証拠（テスト/型検査。exitCodeは生値）:',
         evidenceBlock,
