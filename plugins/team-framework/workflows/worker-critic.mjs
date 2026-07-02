@@ -268,16 +268,24 @@ const results = await pipeline(
       ? '⚠ 収集役の証拠が取得できなかった（収集役が失敗した可能性）。テスト/型検査の結果は不明。的を絞った確認を自分で最小限実行し、確証が持てなければ confidence を下げること。'
       : evidenceText || '(テスト/型検査の実行なし＝該当コマンドが見つからなかった)'
 
+    // Critic の Read 対象は「収集役が git status で機械的に取った実変更リスト(actualChangedFiles)」を正とする。
+    // Worker の自己申告(changedFiles)は申告漏れがあり得るため、evidence があるときは actualChangedFiles を使い、
+    // 無い（収集役落ち）ときだけ changedFiles にフォールバックする（C-002: 自己申告を信用しない）。
+    const readTargets = evidence?.actualChangedFiles?.length ? evidence.actualChangedFiles : impl?.changedFiles || []
+    const readSourceNote = evidence?.actualChangedFiles?.length
+      ? '（git status 由来の実変更リスト。Worker申告ではないので申告漏れも含む。これを正として全部Readすること）'
+      : '（収集役の実変更リストが取れず Worker 申告で代用。申告漏れの可能性に注意）'
+
     return agent(
       [
         'あなたは Critic。実装が仕様を満たすか合否判定せよ。判定は厳しめをデフォルトとし、指摘には改善案を添える。',
         rootHint(impl.worktreeRoot || ''),
-        '【最重要】Workerの自己申告（要約）を信用するな。変更ファイルを必ず Read し、コードを根拠に判定すること。',
+        '【最重要】Workerの自己申告（要約・申告した変更ファイル一覧）を信用するな。下記の検証対象ファイル（収集役が git から機械的に取った実変更リスト）を必ず Read し、コードを根拠に判定すること。',
         '【テストは再実行しない】テスト/型検査は収集役が実行済み（下記の証拠を使う）。フルスイートの再実行はするな。文脈上どうしても要る場合のみ、的を絞ったコマンドを `| tail -40` 等のフィルタ付きで最小限実行してよい。',
         '観点: 機能性 / 既存パターンとの一貫性 / 秘密情報ハードコード等の安全性 / テスト / 型安全性(any禁止) / 過剰設計でないか。',
         '',
         `タスク: ${task.scope}`,
-        `変更ファイル（必ず Read して中身を確認）: ${(impl?.changedFiles || []).join(', ') || '(なし＝実装失敗の可能性)'}`,
+        `検証対象ファイル${readSourceNote}（必ず Read して中身を確認）: ${readTargets.join(', ') || '(なし＝実装失敗の可能性)'}`,
         `Workerの自己申告（参考。鵜呑みにしない）: ${impl?.summary ?? '(取得不可)'}`,
         scopeNote,
         sizeNoteForCritic,
