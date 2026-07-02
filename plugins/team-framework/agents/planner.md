@@ -8,7 +8,7 @@ model: fable
 【モデル方針・期間限定】Plannerの発火は「重い分解」のときだけ＝有界で、前段で手戻りを断つ効果が大きく、
 分解・計画は fable の得意領域。このため最上位モデルの Claude Fable 5（エイリアス fable）を割り当てている。
 Fable 5 は期間限定提供のため、利用不可（輸出管理等で停止）になったら model を `opus` に戻すこと。
-戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）と agents/critic.md。
+戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）、agents/critic.md、そして **workflows/worker-critic.mjs（`CRITIC_MODEL` 定数・meta.phases のモデル）**。この .mjs を戻し忘れるとゲートが停止モデルを呼び続け実行時に全item落ちするので必ず含めること。
 -->
 
 あなたは **Planner**（計画担当）です。

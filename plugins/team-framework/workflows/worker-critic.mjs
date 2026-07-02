@@ -197,6 +197,7 @@ const results = await pipeline(
         '',
         'やること（判断せず機械的に）:',
         '1. `git status --porcelain` で実際に変更/追加されたファイルを列挙し actualChangedFiles に入れる。task.files に無いものは scopeViolations にも入れる。',
+        '   ※ status がクリーンなのに Worker が変更を報告している場合は、Worker がコミットしてしまった可能性。`git log --oneline -5` を見て base からのコミットがあれば、その差分（`git diff <base>..HEAD --numstat` 等）で actualChangedFiles / totalNewLines を拾うこと。',
         '2. 変更/新規ファイルの追加行合計を totalNewLines に入れる（新規ファイルは全行。`git diff --numstat` や `wc -l` を使う。新規で未追跡なら `git add -N` 後に numstat、または `wc -l`）。',
         '3. プロジェクトの型検査とテストを実行する（package.jsonのscripts等から判断。例: tsc --noEmit、npm test、pytest 等。無ければ実行不要）。',
         '4. 各コマンドについて command と exitCode（生値。0=成功）を記録する。失敗（exit≠0）のときだけ failureExcerpt に「関連する失敗箇所」を抜粋する。',
@@ -233,6 +234,11 @@ const results = await pipeline(
     const scopeNote = evidence?.scopeViolations?.length
       ? `⚠ スコープ違反の疑い（許可外ファイルの変更）: ${evidence.scopeViolations.join(', ')}`
       : ''
+    // 収集役が落ちた（evidence=null）ケースと、収集役は動いたがテストが無いケースを区別する。
+    // 前者を「テスト実行なし」と誤認すると、未検証のまま合格を出しかねない。
+    const evidenceBlock = !evidence
+      ? '⚠ 収集役の証拠が取得できなかった（収集役が失敗した可能性）。テスト/型検査の結果は不明。的を絞った確認を自分で最小限実行し、確証が持てなければ confidence を下げること。'
+      : evidenceText || '(テスト/型検査の実行なし＝該当コマンドが見つからなかった)'
 
     return agent(
       [
@@ -248,7 +254,7 @@ const results = await pipeline(
         scopeNote,
         '',
         '収集役が集めた証拠（テスト/型検査。exitCodeは生値）:',
-        evidenceText || '(テスト実行なし)',
+        evidenceBlock,
         '',
         '仕様違反・未処理エッジケース・申告との食い違い・テスト失敗(exit≠0)があれば ok=false。設計を作り直すべきなら needsRedesign=true（前半の再計画へ）。issues に具体的根拠（行・実測挙動）を書く。',
       ]
@@ -274,13 +280,18 @@ if (droppedAll) {
   log('⚠ 全タスクが落ちた。worktree隔離の生成失敗の可能性大（リポジトリにコミットが無い=unborn HEAD等）。最低1コミットを作ってから再実行を。')
 }
 
+// worktree:true 時、合格itemの成果コードは隔離worktree内にしか無い。Orchestratorが「どのツリーから
+// 変更を取り込む／掃除する」かを判断できるよう、item に worktreeRoot を含める（非worktree時は付けない）。
+const wt = (r) => (worklist.worktree ? { worktreeRoot: r.impl?.worktreeRoot } : {})
+
 return {
-  passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles })),
-  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues })),
-  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary })),
+  // confidence を全itemに露出する（SKILL.mdのエスケープ弁「confidence=低なら前半へ戻す」を実装可能にする）。
+  passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles, confidence: r.verdict?.confidence, ...wt(r) })),
+  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues, confidence: r.verdict?.confidence, ...wt(r) })),
+  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary, confidence: r.verdict?.confidence, ...wt(r) })),
   // worktree使用時の後片付け案内
   ...(worklist.worktree
-    ? { note: '隔離worktreeは変更があると自動削除されない。完了後 `git worktree remove <path>` で掃除すること。' }
+    ? { note: '隔離worktreeは変更があると自動削除されない。各itemの worktreeRoot から変更を回収し、完了後 `git worktree remove <worktreeRoot>` で掃除すること。' }
     : {}),
   // worktree生成失敗が疑われる場合のヒント
   ...(droppedAll

@@ -7,7 +7,7 @@ model: fable
 <!--
 【モデル方針・期間限定】Criticは最も判断が重い役割のため、最上位モデルの Claude Fable 5（エイリアス fable）を割り当てている。
 Fable 5 は期間限定提供のため、利用不可（輸出管理等で停止）になったら model を `opus` に戻すこと。
-戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）と agents/planner.md（Critic参照箇所）。
+戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）、agents/planner.md、そして **workflows/worker-critic.mjs（`CRITIC_MODEL` 定数・meta.phases のモデル）**。この .mjs を戻し忘れるとゲートが停止モデルを呼び続け実行時に全item落ちするので必ず含めること。
 -->
 
 あなたは **Critic**（検証担当）です。

@@ -31,7 +31,7 @@ Orchestratorが要求を分析
 - Plannerが各WorkerにSendMessageで直接タスクを割り当てる
 - Workerは設計判断が必要になれば `team-framework:critic` チームメイトにSendMessageで直接相談する
 - 依存関係のあるタスクは前フェーズ完了後に次のチームメイトをspawn
-- **後半を決定論で固める場合**: Orchestratorが worklist を args に渡し、`Workflow({ scriptPath })` で worker-critic.mjs を起動して `Worker → Criticゲート` のパイプラインで回す（起動の詳細は team skill 参照）
+- **後半を決定論で固める場合**: Orchestratorが worklist を args に渡し、`Workflow({ scriptPath })` で worker-critic.mjs を起動して `Worker → 収集 → Criticゲート` のパイプラインで回す（起動の詳細は team skill 参照）
 
 ### Phase 3: 品質確認（検証ゲート）
 

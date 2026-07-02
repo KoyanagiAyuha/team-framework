@@ -74,7 +74,7 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 1. **Orchestratorはリードに徹する**: spawnと初期タスク設定、橋渡し、最終集約だけ。実装しない（O-001）
 2. **直接通信を活用**: Planner→Worker、Worker→CriticはSendMessageで直接やり取りする
 3. **コスト意識**: Workerはsonnetが基本（複雑実装のみopus）。**Planner・Criticはfable**（後半の収集役はsonnet固定）
-   - **【期間限定】** Planner（重い分解＝発火が有界）とCritic（最も判断が重い検証ゲート）に、期間限定提供の Claude Fable 5 を割り当てている。Fable 5が利用不可（輸出管理等で停止）になったら、**Planner・Criticのモデルを両方 opus に戻す**（対象: このファイルの体制図・本項・タスクルーティング表、`agents/critic.md`、`agents/planner.md`）
+   - **【期間限定】** Planner（重い分解＝発火が有界）とCritic（最も判断が重い検証ゲート）に、期間限定提供の Claude Fable 5 を割り当てている。Fable 5が利用不可（輸出管理等で停止）になったら、**Planner・Criticのモデルを両方 opus に戻す**（対象: このファイルの体制図・本項・タスクルーティング表、`agents/critic.md`、`agents/planner.md`、そして **`workflows/worker-critic.mjs` の `CRITIC_MODEL` 定数・meta.phases のモデル**——これを戻し忘れるとゲートが停止モデルを呼び続け全item落ちする）
    - Plannerのガードレール必須（`agents/planner.md`参照）: タスク数最小限／opus Worker割当は3類型厳守／effortは既定のまま上げない／1タスク目安600行以内
    - 補足: `sonnet` / `opus` はエイリアスで常に各系統の最新版に解決される（現在 Sonnet 5 / Opus 4.8）。Workerのモデル表記は変更不要
 4. **並列最大化**: 独立タスクはWorkerチームメイトを複数同時にspawnして並列実行
@@ -93,7 +93,7 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 ## Orchestratorの動き方
 
 1. dashboard.mdのステータスを🔵進行中に更新する（チームは最初のチームメイトspawnで自動成立。事前の「チーム作成」操作は不要）
-2. 要求を分析する。**軽い分解ならOrchestratorが自分で行う**。重い／多フェーズなら `team-framework:planner` でPlannerチームメイト（opus）をspawnし、タスク内容と背景を伝える
+2. 要求を分析する。**軽い分解ならOrchestratorが自分で行う**。重い／多フェーズなら `team-framework:planner` でPlannerチームメイト（fable※期間限定・停止時はopus）をspawnし、タスク内容と背景を伝える
 3. Plannerの立案（必要なWorker数・モデル・スコープ・worklist）に従って `team-framework:worker`（必要なら `team-framework:critic`）チームメイトを**spawnするだけ**。spawn後の作業指示はしない
    - 制約: チームメイトは別のチームメイトをspawnできないため、生成はOrchestratorが行う。ただし**作業の割り当て・指示はPlannerの専権**（OrchestratorはWorkerに直接指示しない＝O-002）
 4. Plannerが各Workerに直接SendMessageでタスクを割り当てる。Workerは設計判断が必要になれば `critic` に直接相談する
