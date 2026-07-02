@@ -56,14 +56,19 @@ const CRITIC_MODEL = 'fable'
 // 収集役は判断ゼロのシェル作業なので最も安いモデル・低effortで固定する（判定はしない）。
 const COLLECTOR_MODEL = 'sonnet'
 
-// 粒度ガードレール（②）。1タスクの新規/変更行がこれを超えたら「fableで読む前に」前半へ差し戻す。
-// 読解下限は分割でしか下げられないため、上限超過はゲート設計でなく分解粒度の問題として背圧をかける。
-// 実測で調整する前提の初期値。
-// 【測定範囲・v0.3.1で明確化】totalNewLines は「そのタスクの担当ファイル(task.files)ぶん」だけを測る。
-//   作業ツリー全体の未コミットdiffで測ると、既存の大きな塊を毎タスク巻き込み、分割しても数値が縮まず
-//   ゲートが空転する（v0.3.0で実発生）。収集役プロンプトのstep2でtask.filesに限定している。
-//   運用面でも、完了したスライスはコミットして作業ツリーを綺麗に保つと増分が素直に測れる（belt-and-suspenders）。
-const MAX_NEW_LINES = 600
+// 粒度ガードレール（②）— 2段構え。「行数」はレビューのしやすさ(コスト)の proxy であって、
+// コード品質のシグナルではない。凝集した単位を数字合わせで割るとむしろ設計が歪むため、
+// ハードブロックは「1回のfableパスで物理的に読み切れない容量」だけに限定し、それ以外は助言に留める。
+//   - SOFT_REVIEW_LINES: 助言のしきい値。超えても差し戻さない。レビューは通常どおり回し、
+//     「大きめ。自然な継ぎ目があれば次回分割を検討」というnoteを添えるだけ（分割は seam で判断、数字では判断しない）。
+//     コードレビュー研究の適正レンジ(200〜400行)に合わせた値。
+//   - HARD_MAX_LINES: 安全弁。ここを超えたら fable を呼ぶ前に差し戻す。設計判断ではなく容量の話
+//     （1パスでは読み切れない/枠を飛ばす）。Checkstyle FileLength(2000)級を目安に高めに置く。
+// 【測定範囲・v0.3.1】totalNewLines は「そのタスクの担当ファイル(task.files)ぶん」だけを測る
+//   （作業ツリー全体の未コミットdiffで測ると既存の塊を毎タスク巻き込み、分割しても縮まず空転＝v0.3.0で実発生）。
+//   運用面でも完了スライスはコミットして作業ツリーを綺麗に保つと増分が素直に測れる。
+const SOFT_REVIEW_LINES = 400
+const HARD_MAX_LINES = 1800
 
 // 失敗ログ抜粋の上限（収集役の圧縮が暴走してもコード側で防御的に切る）。
 const MAX_FAILURE_EXCERPT = 2000 // 1コマンドあたりの文字数
@@ -221,17 +226,28 @@ const results = await pipeline(
     if (!prev || !prev.impl) return null // 前段が落ちた item は終了
     const { impl, evidence } = prev
 
-    // 粒度背圧（②）: 検証対象が上限超過なら、fable を呼ぶ前にコード側で差し戻す（トークンも節約）。
-    if (evidence && typeof evidence.totalNewLines === 'number' && evidence.totalNewLines > MAX_NEW_LINES) {
+    const lines = typeof evidence?.totalNewLines === 'number' ? evidence.totalNewLines : null
+
+    // 粒度背圧（②）— ハード安全弁のみブロック。HARD_MAX_LINES超は「1パスで読み切れない容量」なので
+    // fable を呼ぶ前に差し戻す（設計判断ではなく容量の話。トークンも節約）。行数を数字合わせで割るのでなく
+    // 自然な継ぎ目で分割するよう促す。
+    if (lines !== null && lines > HARD_MAX_LINES) {
       const verdict = {
         ok: false,
         needsRedesign: true,
         confidence: '高',
-        summary: `検証対象が ${evidence.totalNewLines} 行で上限 ${MAX_NEW_LINES} 行を超過。1回のレビューで検証しきれない粒度のため、前半でタスクを分割して再計画すること。`,
-        issues: [`totalNewLines=${evidence.totalNewLines} > MAX_NEW_LINES=${MAX_NEW_LINES}。粒度が検証可能な大きさを超えている（ゲートの問題ではなく分解粒度の問題）。`],
+        summary: `検証対象が ${lines} 行で安全弁 ${HARD_MAX_LINES} 行を超過。1回のfableパスでは読み切れない容量のため、自然な継ぎ目でタスクを分割して再計画すること。`,
+        issues: [`totalNewLines=${lines} > HARD_MAX_LINES=${HARD_MAX_LINES}（容量オーバー）。凝集した単位を数字合わせで割らず、自然な継ぎ目で分割する。`],
       }
       return { task, impl, evidence, verdict }
     }
+
+    // 助言のしきい値（SOFT_REVIEW_LINES）超は差し戻さない。レビューは通常どおり回し、noteを添えるだけ。
+    // 合否はあくまでコードの中身で判断させる（サイズを理由に落とさない）。
+    const sizeNote =
+      lines !== null && lines > SOFT_REVIEW_LINES
+        ? `参考: レビュー単位が大きめ（${lines}行 > 目安 ${SOFT_REVIEW_LINES}行）。ただし合否はコードの中身で判断すること——サイズだけを理由に不合格やneedsRedesignにしない。自然な継ぎ目があるなら issues で「次スライスで分割を検討」と助言してよい（凝集した単位を数字合わせで割らない）。`
+        : ''
 
     // 証拠のテスト結果を Critic 向けに整形（生出力は既に収集役が圧縮済み。ここでも合計上限で防御的に切る）。
     let evidenceText = (evidence?.tests || [])
@@ -259,6 +275,7 @@ const results = await pipeline(
         `変更ファイル（必ず Read して中身を確認）: ${(impl?.changedFiles || []).join(', ') || '(なし＝実装失敗の可能性)'}`,
         `Workerの自己申告（参考。鵜呑みにしない）: ${impl?.summary ?? '(取得不可)'}`,
         scopeNote,
+        sizeNote,
         '',
         '収集役が集めた証拠（テスト/型検査。exitCodeは生値）:',
         evidenceBlock,
@@ -268,7 +285,7 @@ const results = await pipeline(
         .filter(Boolean)
         .join('\n'),
       { label: `Critic:${task.id}`, phase: 'Critic', model: task.criticModel || CRITIC_MODEL, schema: VERDICT },
-    ).then((verdict) => ({ task, impl, evidence, verdict }))
+    ).then((verdict) => ({ task, impl, evidence, verdict, sizeNote }))
   },
 )
 
@@ -293,9 +310,10 @@ const wt = (r) => (worklist.worktree ? { worktreeRoot: r.impl?.worktreeRoot } : 
 
 return {
   // confidence を全itemに露出する（SKILL.mdのエスケープ弁「confidence=低なら前半へ戻す」を実装可能にする）。
-  passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles, confidence: r.verdict?.confidence, ...wt(r) })),
-  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues, confidence: r.verdict?.confidence, ...wt(r) })),
-  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary, confidence: r.verdict?.confidence, ...wt(r) })),
+  // sizeNote は「合格したが大きめ＝次スライスで分割検討」の助言（あるときだけ載る。強制ではない）。
+  passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
+  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
+  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
   // worktree使用時の後片付け案内
   ...(worklist.worktree
     ? { note: '隔離worktreeは変更があると自動削除されない。各itemの worktreeRoot から変更を回収し、完了後 `git worktree remove <worktreeRoot>` で掃除すること。' }

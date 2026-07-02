@@ -75,7 +75,7 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 2. **直接通信を活用**: Planner→Worker、Worker→CriticはSendMessageで直接やり取りする
 3. **コスト意識**: Workerはsonnetが基本（複雑実装のみopus）。**Planner・Criticはfable**（後半の収集役はsonnet固定）
    - **【期間限定】** Planner（重い分解＝発火が有界）とCritic（最も判断が重い検証ゲート）に、期間限定提供の Claude Fable 5 を割り当てている。Fable 5が利用不可（輸出管理等で停止）になったら、**Planner・Criticのモデルを両方 opus に戻す**（対象: このファイルの体制図・本項・タスクルーティング表、`agents/critic.md`、`agents/planner.md`、そして **`workflows/worker-critic.mjs` の `CRITIC_MODEL` 定数・meta.phases のモデル**——これを戻し忘れるとゲートが停止モデルを呼び続け全item落ちする）
-   - Plannerのガードレール必須（`agents/planner.md`参照）: タスク数最小限／opus Worker割当は3類型厳守／effortは既定のまま上げない／1タスク目安600行以内
+   - Plannerのガードレール必須（`agents/planner.md`参照）: タスク数最小限／opus Worker割当は3類型厳守／effortは既定のまま上げない／レビュー単位は小さめに（目安400行前後・ただし凝集した単位を数字合わせで割らない）
    - 補足: `sonnet` / `opus` はエイリアスで常に各系統の最新版に解決される（現在 Sonnet 5 / Opus 4.8）。Workerのモデル表記は変更不要
 4. **並列最大化**: 独立タスクはWorkerチームメイトを複数同時にspawnして並列実行
 5. **透明性**: エンジニアへの報告は常に正直に。失敗も隠さない（O-004）
@@ -86,7 +86,7 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 
 - **前半（Teams）**: 要求を分析。重ければPlannerをspawnして分解、設計の難所は**着手前に**Criticに相談（コードが無い段階＝fableを最も安く使える）。出力は**確定した worklist（構造化）**
 - **後半（Workflow）**: worklist を args に渡して worker-critic.mjs を起動。`Worker → 収集役 → Critic ゲート` を並列パイプラインで回す（収集役がテスト/tscを圧縮し、Criticはコードを読んで証拠で判定）
-- **エスケープ弁**: 検証ゲートが `needsRedesign=true`（設計やり直し）、または `confidence=低`（判定に自信なし）を返したら、その item を前半（Teams）に戻して再計画する。粒度超過（目安600行）による差し戻しも同じ経路——タスクを小さく割り直して worklistを更新し後半を再実行する
+- **エスケープ弁**: 検証ゲートが `needsRedesign=true`（設計やり直し）、または `confidence=低`（判定に自信なし）を返したら、その item を前半（Teams）に戻して再計画する。粒度の安全弁（約1800行＝1パスで読み切れない容量）超による差し戻しも同じ経路——自然な継ぎ目で割り直して worklistを更新し後半を再実行する（目安400行超は差し戻さず助言のみ）
 
 > 段階運用: まず後半だけWorkflow化し、前半は軽ければOrchestratorが兼ねる。分解が重くなったらPlannerをspawnする。
 
