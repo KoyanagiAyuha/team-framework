@@ -59,6 +59,10 @@ const COLLECTOR_MODEL = 'sonnet'
 // 粒度ガードレール（②）。1タスクの新規/変更行がこれを超えたら「fableで読む前に」前半へ差し戻す。
 // 読解下限は分割でしか下げられないため、上限超過はゲート設計でなく分解粒度の問題として背圧をかける。
 // 実測で調整する前提の初期値。
+// 【測定範囲・v0.3.1で明確化】totalNewLines は「そのタスクの担当ファイル(task.files)ぶん」だけを測る。
+//   作業ツリー全体の未コミットdiffで測ると、既存の大きな塊を毎タスク巻き込み、分割しても数値が縮まず
+//   ゲートが空転する（v0.3.0で実発生）。収集役プロンプトのstep2でtask.filesに限定している。
+//   運用面でも、完了したスライスはコミットして作業ツリーを綺麗に保つと増分が素直に測れる（belt-and-suspenders）。
 const MAX_NEW_LINES = 600
 
 // 失敗ログ抜粋の上限（収集役の圧縮が暴走してもコード側で防御的に切る）。
@@ -128,7 +132,7 @@ const EVIDENCE = {
     taskId: { type: 'string' },
     actualChangedFiles: { type: 'array', items: { type: 'string' }, description: 'git status 由来の実際に変更/追加されたファイル' },
     scopeViolations: { type: 'array', items: { type: 'string' }, description: 'task.files に無いのに変更されたファイル（スコープ違反の疑い）' },
-    totalNewLines: { type: 'integer', description: '変更ファイルの追加/新規行の合計（新規ファイルは全行）。粒度判定に使う' },
+    totalNewLines: { type: 'integer', description: 'このタスクの担当ファイル(task.files)に限定した追加/新規行の合計（新規ファイルは全行）。作業ツリー全体ではなくタスクのレビュー単位を測る。粒度背圧に使う' },
     tests: {
       type: 'array',
       items: {
@@ -201,7 +205,7 @@ const results = await pipeline(
         'やること（判断せず機械的に）:',
         '1. `git status --porcelain` で実際に変更/追加されたファイルを列挙し actualChangedFiles に入れる。task.files に無いものは scopeViolations にも入れる。',
         '   ※ status がクリーンなのに Worker が変更を報告している場合は、Worker がコミットしてしまった可能性。`git log --oneline -5` を見て base からのコミットがあれば、その差分（`git diff <base>..HEAD --numstat` 等）で actualChangedFiles / totalNewLines を拾うこと。',
-        '2. 変更/新規ファイルの追加行合計を totalNewLines に入れる（新規ファイルは全行。`git diff --numstat` や `wc -l` を使う。新規で未追跡なら `git add -N` 後に numstat、または `wc -l`）。',
+        '2. totalNewLines には「このタスクの担当ファイル（上記の"許可されたファイル"）」の追加/新規行だけを数える。**作業ツリー全体の未コミットdiffで測ってはいけない**——他タスク由来や既存の未コミットの塊を巻き込むと、分割しても数値が縮まず粒度ゲートが空転する。task.files のパスに限定して数える（例: `git diff --numstat -- <許可されたファイルのパス...>` の追加行合計。新規ファイルは全行を `wc -l`。未追跡なら `git add -N -- <パス>` 後に numstat）。task.files が未指定のときだけ actualChangedFiles を対象にする。',
         '3. プロジェクトの型検査とテストを実行する（package.jsonのscripts等から判断。例: tsc --noEmit、npm test、pytest 等。無ければ実行不要）。',
         '4. 各コマンドについて command と exitCode（生値。0=成功）を記録する。失敗（exit≠0）のときだけ failureExcerpt に「関連する失敗箇所」を抜粋する。',
         '',
