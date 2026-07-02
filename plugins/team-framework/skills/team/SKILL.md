@@ -22,13 +22,16 @@ $ARGUMENTS
 Orchestrator（＝あなた・main session）── 分解・統括・集約・前半↔後半の橋渡し
   │
   ├─【動的：Agent Teams】前半（読めない工程）
-  │   ├ Planner（opus）  ── 重い分解のときだけ立てる。worklistを返す
-  │   └ Critic（fable）  ── 着手前の設計相談（L4–L6）を受ける ※fableは期間限定・停止時はopus
+  │   ├ Planner（fable）  ── 重い分解のときだけ立てる。worklistを返す ※fableは期間限定・停止時はopus
+  │   └ Critic（fable）   ── 着手前の設計相談（L4–L6）を受ける ※fableは期間限定・停止時はopus
   │
   └─【決定論：Workflow】後半（毎回やる工程）worker-critic.mjs
       ├ Worker（sonnet基本）── 隔離実行・並列
-      └ Critic              ── 検証ゲート（通らないと完了しない）
+      ├ 収集役（sonnet）    ── 判断ゼロ。テスト/tscを実行し exit code＋失敗抜粋に圧縮
+      └ Critic（fable）     ── 検証ゲート。コードをReadし収集役の証拠で合否判定（通らないと完了しない）
 ```
+
+※ Planner・Criticともに期間限定の fable。発火が有界（Plannerは重い分解時のみ、Criticは検証ゲート）なので最上位モデルを割り当てている。停止時は両方 opus に戻す（下記「コスト意識」）。
 
 チームメイト同士はSendMessageで直接通信できる。Orchestratorはチームの起動・橋渡し・最終集約に専念する。
 
@@ -70,9 +73,10 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 
 1. **Orchestratorはリードに徹する**: spawnと初期タスク設定、橋渡し、最終集約だけ。実装しない（O-001）
 2. **直接通信を活用**: Planner→Worker、Worker→CriticはSendMessageで直接やり取りする
-3. **コスト意識**: Workerはsonnetが基本（複雑実装のみopus）。Plannerはopus、Criticはfable
-   - **【期間限定】** Criticは最も判断が重い役割のため、期間限定提供の Claude Fable 5 を割り当てている。Fable 5が利用不可（輸出管理等で停止）になったら、Criticのモデルを **opus に戻す**（対象: このファイルの体制図・本項・タスクルーティング表、`agents/critic.md`、`agents/planner.md` のCritic参照箇所）
-   - 補足: `sonnet` / `opus` はエイリアスで常に各系統の最新版に解決される（現在 Sonnet 5 / Opus 4.8）。Worker/Plannerのモデル表記は変更不要
+3. **コスト意識**: Workerはsonnetが基本（複雑実装のみopus）。**Planner・Criticはfable**（後半の収集役はsonnet固定）
+   - **【期間限定】** Planner（重い分解＝発火が有界）とCritic（最も判断が重い検証ゲート）に、期間限定提供の Claude Fable 5 を割り当てている。Fable 5が利用不可（輸出管理等で停止）になったら、**Planner・Criticのモデルを両方 opus に戻す**（対象: このファイルの体制図・本項・タスクルーティング表、`agents/critic.md`、`agents/planner.md`）
+   - Plannerのガードレール必須（`agents/planner.md`参照）: タスク数最小限／opus Worker割当は3類型厳守／effortは既定のまま上げない／1タスク目安600行以内
+   - 補足: `sonnet` / `opus` はエイリアスで常に各系統の最新版に解決される（現在 Sonnet 5 / Opus 4.8）。Workerのモデル表記は変更不要
 4. **並列最大化**: 独立タスクはWorkerチームメイトを複数同時にspawnして並列実行
 5. **透明性**: エンジニアへの報告は常に正直に。失敗も隠さない（O-004）
 6. **ダッシュボード駆動**: 進捗はdashboard.mdに書き込む。Orchestratorのみが更新する
@@ -80,9 +84,9 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 
 ## ハイブリッドの進め方（前半＝動的／後半＝決定論）
 
-- **前半（Teams）**: 要求を分析。重ければPlannerをspawnして分解、設計の難所はCriticに相談。出力は**確定した worklist（構造化）**
-- **後半（Workflow）**: worklist を args に渡して worker-critic.mjs を起動。`Worker → Critic ゲート` を並列パイプラインで回す
-- **エスケープ**: Criticが `needsRedesign=true` を返したら、前半（Teams）に戻して再計画 → worklistを更新して後半を再実行
+- **前半（Teams）**: 要求を分析。重ければPlannerをspawnして分解、設計の難所は**着手前に**Criticに相談（コードが無い段階＝fableを最も安く使える）。出力は**確定した worklist（構造化）**
+- **後半（Workflow）**: worklist を args に渡して worker-critic.mjs を起動。`Worker → 収集役 → Critic ゲート` を並列パイプラインで回す（収集役がテスト/tscを圧縮し、Criticはコードを読んで証拠で判定）
+- **エスケープ弁**: 検証ゲートが `needsRedesign=true`（設計やり直し）、または `confidence=低`（判定に自信なし）を返したら、その item を前半（Teams）に戻して再計画する。粒度超過（目安600行）による差し戻しも同じ経路——タスクを小さく割り直して worklistを更新し後半を再実行する
 
 > 段階運用: まず後半だけWorkflow化し、前半は軽ければOrchestratorが兼ねる。分解が重くなったらPlannerをspawnする。
 
@@ -117,7 +121,7 @@ team-framework:planner agent type を使ってPlannerチームメイトを1体sp
 | L4 分析 | 根本原因調査、ボトルネック特定 | Critic | fable※ |
 | L5 評価 | 設計案比較、ライブラリ選定 | Critic | fable※ |
 | L6 創造 | 新規アーキテクチャ設計 | Critic | fable※ |
-| 計画 | タスク分解、優先度付け | Planner | opus |
+| 計画 | タスク分解、優先度付け | Planner | fable※ |
 
 ※ fable = Claude Fable 5（期間限定）。利用不可になったら opus に戻す（上記「コスト意識」参照）
 
