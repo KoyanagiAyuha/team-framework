@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": "mkdir -p \"$HOME/.claude/workflows\" && cp \"${CLAUDE_PLUGIN_ROOT}/workflows/worker-critic.mjs\" \"$HOME/.claude/workflows/worker-critic.mjs\" && echo \"[team-framework] synced worker-critic.mjs from ${CLAUDE_PLUGIN_ROOT}\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/set-worktree-baseref.sh\""
           }
         ]
       }

@@ -145,10 +145,11 @@ worklist の契約（前半が満たす）:
 - `files` をtasks間で重複させない（競合回避）
 - **git管理下のプロジェクトでは `worktree: true`** を付けるとWorkerをworktree隔離で走らせ、スコープ外汚染・並列競合を物理的に防ぐ。非git環境では `false`（または省略）
 - **【worktree:true の前提①】セッション開始時点で git repo であること。** ハーネスのworktree機構はgit判定をセッション開始時に固定するため、**非gitディレクトリで起動したセッションは途中で `git init` しても隔離worktreeを作れない**（`Cannot create agent worktree: not in a git repository`）。→ git管理下のプロジェクトでセッションを開始する。
-- **【worktree:true の前提②】リポジトリに最低1コミットが必要。** worktreeはHEADから分岐するため、コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` で失敗する。起動前に確認し、未コミットなら先に1コミット作る:
+- **【worktree:true の前提②】リポジトリに最低1コミットが必要。** worktreeはコミットから分岐するため、コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` で失敗する。起動前に確認し、未コミットなら先に1コミット作る:
   ```bash
   git rev-parse HEAD >/dev/null 2>&1 || git commit --allow-empty -m "init"
   ```
+- **【worktree:true の基点＝ローカルHEAD】** Claude Code のworktreeは**デフォルトで `origin/HEAD`（リモート既定ブランチ）から分岐**するため、素のままだと**ローカルで進めた未pushコミットがWorkerの隔離worktreeに反映されない**。本プラグインは SessionStart フック（`hooks/set-worktree-baseref.sh`）がプロジェクトの `.claude/settings.local.json` に `worktree.baseRef:"head"` を**未設定時のみ注入**し、worktreeを「現在のローカルHEAD基点」に切り替える（＝直前のコミットまでの状態でWorkerが作業できる）。既に `worktree.baseRef` が設定済みならユーザー設定を尊重して何もしない。なお**未コミットの作業ツリー変更は git worktree の仕様上コピーされない**ので、取り込みたい変更は起動前にコミットしておくこと。`.claude/settings.local.json` は個人スコープなので、gitに乗せたくなければ `.gitignore` に含まれているか確認する。
 - **【worktree:true の落とし穴・実機確認済み】** 隔離worktreeは「git status上で変更があるとき」だけ保持される。タスクの成果物が **`.gitignore` 対象のパス（例: `tmp/`）だと git は「変更なし」と見なし、worktreeごと自動削除されて成果が消える**（収集役/Criticも参照できず不合格になる）。worktree:true で回すタスクの成果物は **git 管理対象のパス**に置くこと（gitignore配下に出すなら worktree:false で回す）。
 - **【worktree:true の後片付け】** 変更のある隔離worktreeは自動削除されない。完了後に掃除する（戻り値の `note` でも案内される）:
   ```bash

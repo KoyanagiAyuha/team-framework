@@ -98,9 +98,14 @@ if (!worklist.tasks || worklist.tasks.length === 0) {
 // 【前提1：セッション開始時点でgit repoであること】ハーネスのworktree機構はgit判定をセッション開始時に固定する。
 //   非gitディレクトリで起動したセッションは、途中で `git init` しても隔離worktreeを作れない
 //   （`Cannot create agent worktree: not in a git repository`）。→ git管理下のプロジェクトでセッションを開始すること。
-// 【前提2：最低1コミット（unborn HEAD不可）】worktreeは HEAD から分岐するため、コミット0件だと
+// 【前提2：最低1コミット（unborn HEAD不可）】worktreeはコミットから分岐するため、コミット0件だと
 //   `Failed to resolve base branch "HEAD"` で失敗する。未コミットなら起動前に `git commit --allow-empty -m init`。
 //   このスクリプトはサンドボックスでgitを実行できないため、両前提の確認は呼び出し側(Orchestrator/Planner)の責務（skill/planner参照）。
+// 【基点：ローカルHEAD】Claude Code の worktree はデフォルトで origin/HEAD(リモート既定ブランチ)から分岐するため、
+//   ローカルで進めた未pushコミットが隔離worktreeに反映されない。本プラグインは SessionStart フック
+//   (hooks/set-worktree-baseref.sh)が settings.local.json に worktree.baseRef="head" を注入し、
+//   「現在のローカルHEAD基点」に切り替える。→ 直前のコミットまでの状態でWorkerが作業できる。
+//   ※未コミットの作業ツリー変更はgit worktreeの仕様上コピーされない。取り込みたい変更は起動前にコミットする。
 // 【後片付け】変更のある隔離worktreeは自動削除されない。完了後 `git worktree remove <path>` が要る（戻り値 noteで案内）。
 // 【落とし穴・実機確認済み】隔離worktreeは「git status上で変更があるとき」だけ保持される。成果物が .gitignore 対象
 //   （例: tmp/）だと git は「変更なし」と見なして worktree ごと自動削除し、収集役/Criticが参照できず全て消える。
