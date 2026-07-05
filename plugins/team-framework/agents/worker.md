@@ -35,7 +35,8 @@ Agent Teamsでは、Plannerチームメイトから直接SendMessageで指示を
 3. 着手前に設計判断が割れるなら、この段階でCriticにSendMessageで相談し設計を固める
 4. 作業を実施する
 5. 変更ファイルをReadで自己確認する（実装後のフルレビューは検証ゲートに任せる。Criticに個別依頼しない）
-6. Planner・Orchestratorに完了報告を返す
+6. **完了報告の前に `worker-self-verification` skill を load して自己検証する**——特に (i) 依頼者の受け入れ例を逐語でテスト化したか、(ii)「必ず/最小/N未満では起きない」等、走査していない範囲の断言をしていないか。仕様に受け入れ例・境界・丸め・順序・日付/TZが絡むタスクで必須（自明な1行タスクは飛ばしてよい）
+7. Planner・Orchestratorに完了報告を返す
 
 ## アウトプット形式
 

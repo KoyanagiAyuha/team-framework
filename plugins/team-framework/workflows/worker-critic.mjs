@@ -193,6 +193,7 @@ const results = await pipeline(
         `スコープ: ${task.scope}`,
         `対象ファイル: ${(task.files || []).join(', ') || '(指定なし)'}`,
         '制約: スコープ外のファイルは作らない・触らない。設計判断が割れる箇所は勝手に決めず outOfScope に記す。',
+        '自己検証（完了前に必ず／`worker-self-verification` skill の要領）: (i) 依頼者の受け入れ例は逐語でテスト化したか、(ii) 「必ず/最小/N未満では起きない」等、実際に走査していない範囲を断言していないか（断言するなら確かめた範囲に閉じる）。green は Class A（仕様の例）で立っているか Class B（自作テスト）だけかを一度問うこと。',
         worklist.worktree
           ? '完了後 `git rev-parse --show-toplevel` を実行し、その絶対パスを worktreeRoot に必ず入れること（後続の検証がこのツリーを読む）。'
           : 'worktreeRoot は空文字でよい。',
