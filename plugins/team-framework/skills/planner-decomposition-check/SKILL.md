@@ -1,7 +1,11 @@
 ---
 name: planner-decomposition-check
 description: タスク分解（worklist）を確定して Worker に配る前に、「悪い分解」を却下するための検査。良い分解を"生成"する skill ではなく、生成した分解を"棄却"する側の関門。Planner が worklist を後半 Workflow に渡す直前、または Orchestrator が軽い分解を自分でやったときに load する。
+disable-model-invocation: true
 ---
+
+<!-- 【凍結・棚上げ 2026-07-06】認知系skill凍結方針により、モデルの自動起動を無効化した（disable-model-invocation:true）。
+     効果は未実証・既定では配線しない。使うときだけ人が明示的に load する。これ以上作り込まない。 -->
 
 <!-- 由来：Claude Fable 5 の設計方針「良い分解を生成する中核（自然な継ぎ目を見つける）は手続き化しにくい。移植できるのは"悪い分解を却下する検査基準"」に基づき opus が起草、fable が精査（⑤タスク文の自己完結性を追加）。 -->
 
