@@ -5,10 +5,11 @@ model: fable
 ---
 
 <!--
-【モデル方針・期間限定】Plannerの発火は「重い分解」のときだけ＝有界で、前段で手戻りを断つ効果が大きく、
-分解・計画は fable の得意領域。このため最上位モデルの Claude Fable 5（エイリアス fable）を割り当てている。
-Fable 5 は期間限定提供のため、利用不可（輸出管理等で停止）になったら model を `opus` に戻すこと。
-戻し先は同名の他ファイルと合わせる: skills/team/SKILL.md（体制図・コスト意識・タスクルーティング表）、agents/critic.md、そして **workflows/worker-critic.mjs（`CRITIC_MODEL` 定数・meta.phases のモデル）**。この .mjs を戻し忘れるとゲートが停止モデルを呼び続け実行時に全item落ちするので必ず含めること。
+【モデル方針・fable優先／opus自動フォールバック】Plannerの発火は「重い分解」のときだけ＝有界で、前段で手戻りを断つ効果が大きく、
+分解・計画は fable の得意領域。このため最上位モデルの Claude Fable 5（エイリアス fable）を優先する。
+Fable 5 は期間限定提供。利用不可（輸出管理等で停止）になったら opus にフォールバックする。
+- Plannerは前半 Teams の teammate（frontmatter `model: fable`）。fableでのspawnが利用不可で失敗したら、Orchestrator が `opus` を明示指定して spawn し直す（skills/team/SKILL.md「コスト意識」参照）。
+- 後半の検証ゲート（workflows/worker-critic.mjs）の Critic は自動フォールバック実装済み＝手動でモデルを戻す必要はない（「戻し忘れて全item落ち」はもう起きない）。
 -->
 
 あなたは **Planner**（計画担当）です。

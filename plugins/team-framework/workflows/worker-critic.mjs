@@ -44,14 +44,35 @@ export const meta = {
   phases: [
     { title: 'Worker', detail: 'Workerが各タスクをスコープ内で並列実装' },
     { title: 'Collect', detail: '収集役がテスト/tscを実行し証拠を機械的に圧縮（判断ゼロ）', model: 'sonnet' },
-    { title: 'Critic', detail: 'Criticが各成果物を敵対的に検証（合格まで通さない関門）', model: 'fable' },
+    { title: 'Critic', detail: 'Criticが各成果物を敵対的に検証（合格まで通さない関門）', model: 'fable→opus' },
   ],
 }
 
-// 【モデル方針・期間限定】Criticゲートは最も判断が重い関門のため、最上位モデルの Claude Fable 5（エイリアス fable）を割り当てる。
-// Fable 5 は期間限定提供。利用不可（輸出管理等で停止）になったら CRITIC_MODEL を 'opus' に戻すこと。
-// （agents/critic.md・agents/planner.md・skills/team/SKILL.md のCritic参照箇所も同時に戻す）
-const CRITIC_MODEL = 'fable'
+// 【モデル方針】Criticゲートは最も判断が重い関門のため、最上位モデルの Claude Fable 5（エイリアス fable）を優先する。
+// Fable 5 は期間限定提供。**利用不可になっても自動でフォールバックする**（下記 criticAgent）ので、手動で戻す必要はない
+// ＝「fable停止時に CRITIC_MODEL を戻し忘れて全item落ち」の footgun は解消済み。
+//   - fable が判定を返さなかった item は、その場で opus に切替えて再判定する。
+//   - 一度 fable が落ちたら以後の item は opus 直行にラッチする（停止中の無駄な fable 再試行を避ける）。
+// per-task の criticModel 明示上書きは尊重する（fable以外を指定した場合はフォールバック対象外）。
+const CRITIC_MODEL = 'fable' // 優先モデル
+const CRITIC_FALLBACK = 'opus' // fable利用不可時のフォールバック先
+let fableUnavailable = false // 一度fableが判定を返さなかったら以後はopus直行にラッチ
+
+// Criticゲート1item分の呼び出し。fable優先・失敗時はopusへ自動フォールバック。
+async function criticAgent(promptStr, task) {
+  const base = { label: `Critic:${task.id}`, phase: 'Critic', schema: VERDICT }
+  const preferred = task.criticModel || CRITIC_MODEL
+  // 明示上書きが fable 以外なら、その指定を素直に使う（フォールバックは fable のときだけ働く）。
+  if (preferred !== 'fable') return agent(promptStr, { ...base, model: preferred })
+  // 既に fable が落ちていると分かっていれば opus に直行。
+  if (fableUnavailable) return agent(promptStr, { ...base, model: CRITIC_FALLBACK })
+  const v = await agent(promptStr, { ...base, model: 'fable' })
+  if (v) return v
+  // fable が判定を返さなかった（利用不可/終端エラー等）→ 以後 opus 直行にラッチし、この item も opus で再判定。
+  fableUnavailable = true
+  log('⚠ Criticゲート: fable が判定を返さず。opus にフォールバックして続行（以後の item も opus）。')
+  return agent(promptStr, { ...base, model: CRITIC_FALLBACK })
+}
 
 // 収集役は判断ゼロのシェル作業なので最も安いモデル・低effortで固定する（判定はしない）。
 const COLLECTOR_MODEL = 'sonnet'
@@ -283,8 +304,7 @@ const results = await pipeline(
     const readTargets = [...new Set([...actual, ...claimed])]
     const readSourceNote = '（git status 由来の実変更リストと Worker 申告の和集合。申告にのみあるファイルは git に見えない＝虚偽申告か git 外成果物の可能性があるので特に注意して確認すること）'
 
-    return agent(
-      [
+    const criticPrompt = [
         'あなたは Critic。実装が仕様を満たすか合否判定せよ。判定は厳しめをデフォルトとし、指摘には改善案を添える。',
         rootHint(impl.worktreeRoot || ''),
         '【最重要】Workerの自己申告（要約）を鵜呑みにするな。下記の検証対象ファイルを必ず Read し、コードを根拠に裏取りして判定すること。',
@@ -303,9 +323,8 @@ const results = await pipeline(
         '仕様違反・未処理エッジケース・申告との食い違い・テスト失敗(exit≠0)があれば ok=false。設計を作り直すべきなら needsRedesign=true（前半の再計画へ）。issues に具体的根拠（行・実測挙動）を書く。',
       ]
         .filter(Boolean)
-        .join('\n'),
-      { label: `Critic:${task.id}`, phase: 'Critic', model: task.criticModel || CRITIC_MODEL, schema: VERDICT },
-    ).then((verdict) => ({ task, impl, evidence, verdict, sizeNote }))
+        .join('\n')
+    return criticAgent(criticPrompt, task).then((verdict) => ({ task, impl, evidence, verdict, sizeNote }))
   },
 )
 
