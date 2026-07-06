@@ -32,9 +32,9 @@
 //         files: ["src/a.ts"],         // 触るファイル（※tasks間で重複させない＝競合回避）
 //         model: "sonnet" | "opus",    // 既定sonnet。複雑実装のみopus
 //         criticModel: "fable",        // 任意。検証モデルの明示上書き（省略時は fable）。※per-task階層化の予約フィールド
-//         gate:  "normal",             // 【予約・未実装】検証ゲートの強度。値は "normal"(既定=Critic1回) / "strict"(高stakes=敵対者複数で多数決・将来実装) のみ。
+//         gate:  "normal",             // 任意。検証ゲートの強度。値は "normal"(既定=Critic1回) / "strict"(高stakes=多視点独立検証3レンズ・fail-closed集約) のみ。※実装は runGate()。
 //                                      //   ★ "none" は持たない: ゲートを飛ばせる=「検証は非オプション（後半に入った物は誰の判断でも検証を免れない）」という後半の核心的保証を壊すため。
-//                                      //   ★ 深度でコストを下げない。適応は"入口"（SKILL.md 入場基準＝何をWorkflowに入れるか）で行う。strict は検証を"足す"だけなので不変条件と両立するが YAGNI＝実需まで実装しない。
+//                                      //   ★ 深度でコストを下げない。省く判断は"入口"（SKILL.md 入場基準＝何をWorkflowに入れるか）で行う。strict は検証を"足す"だけ(床=normalは不変)なので不変条件と両立する。乱発しない（既定は normal）。
 //         deps:  []                    // 依存タスクID（任意）
 //       }
 //     ]
@@ -78,6 +78,49 @@ async function criticAgent(promptStr, task) {
   fableUnavailable = true
   log('⚠ Criticゲート: fable が判定を返さず。opus にフォールバックして続行（以後の item も opus）。')
   return agent(promptStr, { ...base, model: CRITIC_FALLBACK })
+}
+
+// strict ゲート用の多視点レンズ（perspective-diverse verify）。各レンズは自分の観点だけで独立に不合格を出せる。
+// 単なる同一Critic×Nでなく視点を分けるのは、冗長より「違う失敗モードを別々に見張る」ため。
+const STRICT_LENSES = [
+  { key: 'A-仕様適合', focus: '【仕様適合・正しさ】仕様の受け入れ例・境界・丸め・順序・日付/TZ・エラー経路をコードが厳密に満たすか。機能的正しさだけに集中する。' },
+  { key: 'B-安全性', focus: '【安全性・障害耐性】秘密情報のハードコード/注入、破壊的操作の安全性、未処理エラー・例外経路、リソースリーク、未定義動作、並行/競合。「正しく動くか」より「壊れ方・危険」に集中する。' },
+  { key: 'C-独立再導出', focus: '【独立再導出（脱相関）】Workerの申告も他レビュアの結論も信用せず、タスクと仕様から**あなた自身が要求リストを独立に再導出**し、そのリストにコードを照合する。共有された誤読を捕まえるのが役目。' },
+]
+
+// 検証ゲート1item分。gate!=="strict" は従来どおり Critic 1回。gate==="strict" は多視点3レンズを並列に回し、
+// 保守的に集約する（fail-closed: 全レンズが判定を返し全員okのときだけ合格。1レンズでも根拠ある不合格／判定未完なら不合格）。
+// strict は検証を"足す"だけで「検証は非オプション」の不変条件を壊さない（床=normalは動かさず上に積む）。高stakesタスク用。
+async function runGate(criticPrompt, task) {
+  if (task.gate !== 'strict') return criticAgent(criticPrompt, task)
+  const verdicts = await parallel(
+    STRICT_LENSES.map((lens) => () =>
+      criticAgent(
+        `${criticPrompt}\n\n【strictゲート・多視点検証】あなたの担当レンズ=${lens.focus}\nこの1レンズの観点だけで独立に判定する。自分のレンズで根拠ある欠陥（file:line/実測挙動）を見つけたら遠慮なく ok=false。根拠のない直感では落とさない。`,
+        { ...task, id: `${task.id}:${lens.key}` },
+      ),
+    ),
+  )
+  const confRank = { 高: 3, 中: 2, 低: 1 }
+  const rankConf = { 3: '高', 2: '中', 1: '低' }
+  const got = verdicts.map((v, i) => ({ lens: STRICT_LENSES[i].key, v }))
+  const missing = got.filter((g) => !g.v)
+  const present = got.filter((g) => g.v)
+  const failing = present.filter((g) => g.v.ok === false)
+  const ok = missing.length === 0 && failing.length === 0 // 全レンズが判定を返し全員okのときだけ合格
+  const needsRedesign = present.some((g) => g.v.needsRedesign)
+  const minRank = present.length ? Math.min(...present.map((g) => confRank[g.v.confidence] || 2)) : 1
+  const confidence = ok ? rankConf[minRank] : rankConf[Math.min(minRank, 2)] // 不合格/未完で「高」は名乗らせない
+  const issues = [
+    ...missing.map((g) => `[${g.lens}] 検証未完（判定を返さず＝fail-closedで不合格側に算入）`),
+    ...present.flatMap((g) => (g.v.issues || []).map((s) => `[${g.lens}] ${s}`)),
+  ]
+  const summary =
+    `strict多視点検証: ${present.length - failing.length}/${STRICT_LENSES.length} レンズ合格` +
+    (missing.length ? `・${missing.length}レンズ未完` : '') +
+    (failing.length ? `・不合格レンズ: ${failing.map((g) => g.lens).join(',')}` : '') +
+    '（fail-closed: 全レンズ合格時のみpass）'
+  return { ok, needsRedesign, confidence, summary, issues }
 }
 
 // 収集役は判断ゼロのシェル作業なので最も安いモデル・低effortで固定する（判定はしない）。
@@ -330,7 +373,7 @@ const results = await pipeline(
       ]
         .filter(Boolean)
         .join('\n')
-    return criticAgent(criticPrompt, task).then((verdict) => ({ task, impl, evidence, verdict, sizeNote }))
+    return runGate(criticPrompt, task).then((verdict) => ({ task, impl, evidence, verdict, sizeNote }))
   },
 )
 

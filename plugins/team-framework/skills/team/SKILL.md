@@ -151,6 +151,7 @@ worklist の契約（前半が満たす）:
 }
 ```
 - `files` をtasks間で重複させない（競合回避）
+- **検証ゲートの強度** は任意の `gate` フィールドで指定できる: `"normal"`（既定・Critic1回）／`"strict"`（**高stakes用**＝多視点の独立検証3レンズ〈仕様適合・安全性・独立再導出〉を並列に回し、全レンズ合格時のみpassのfail-closed集約）。**`"none"` は存在しない**（検証は非オプション）。乱発せず、課金・破壊的変更・認証など「間違えたら回収不能」なタスクにだけ `strict` を付ける。
 - **git管理下のプロジェクトでは `worktree: true`** を付けるとWorkerをworktree隔離で走らせ、スコープ外汚染・並列競合を物理的に防ぐ。非git環境では `false`（または省略）
 - **【worktree:true の前提①】セッション開始時点で git repo であること。** ハーネスのworktree機構はgit判定をセッション開始時に固定するため、**非gitディレクトリで起動したセッションは途中で `git init` しても隔離worktreeを作れない**（`Cannot create agent worktree: not in a git repository`）。→ git管理下のプロジェクトでセッションを開始する。
 - **【worktree:true の前提②】リポジトリに最低1コミットが必要。** worktreeはコミットから分岐するため、コミット0件(unborn HEAD)だと `Failed to resolve base branch "HEAD"` で失敗する。起動前に確認し、未コミットなら先に1コミット作る:
