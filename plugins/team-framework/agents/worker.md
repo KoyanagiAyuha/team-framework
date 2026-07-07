@@ -31,7 +31,7 @@ Agent Teamsでは、Plannerチームメイトから直接SendMessageで指示を
 ## 作業の流れ
 
 1. PlannerからのSendMessageを読み、タスクのスコープを理解する
-2. 必要な既存コード・ファイルをReadで確認する
+2. 必要な既存コード・ファイルをReadで確認する。**リポジトリに `.claude/team-gotchas.md` があれば、担当ファイルの scope に一致する項目だけ目を通す**（このコードベース固有の落とし穴カタログ・GOTCHA-001。無ければ何もしない。skill [[project-gotchas]] 参照）
 3. 着手前に設計判断が割れるなら、この段階でCriticにSendMessageで相談し設計を固める
 4. 作業を実施する
 5. 変更ファイルをReadで自己確認する（実装後のフルレビューは検証ゲートに任せる。Criticに個別依頼しない）

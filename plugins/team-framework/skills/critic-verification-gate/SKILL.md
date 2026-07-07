@@ -7,7 +7,7 @@ disable-model-invocation: true
 <!-- 【凍結・棚上げ 2026-07-06】認知系skill凍結方針により、モデルの自動起動を無効化した（disable-model-invocation:true）。
      実測で opus×小レビューでは効果ゼロ〜微害・既定では配線しない。description の未検証3レジーム（大規模diff／Class A薄い判定／軽量モデルゲート）を試すときだけ、人が明示的に load して使う。これ以上作り込まない。 -->
 
-<!-- 由来：Claude Fable 5 が自分の検証ゲート思考を内省・設計し、opus が清書、fable が精査した skill（2026-07 期間限定fable在籍時の産物）。
+<!-- 由来：Claude Fable 5 が自分の検証ゲート思考を内省・設計し、opus が清書、fable が精査した skill（2026-07・fableが利用できた時期の産物）。
      【効果の実測に基づく正直な注意】このゲート skill は、opus/sonnet × 小規模パケット × レビューモードの実測では判定を改善しなかった（両モデルとも素の状態で欠陥を高確信検出できたため）。むしろ clean 事例で不要な確信度ヘッジ（過剰批判の助長）を招くことも観測された。
      効くと期待される（が未測定の）レジームは description の (i)〜(iii)＝大規模diff・Class A 証拠が薄い判定・軽量モデルゲート。それ以外では load しない方が無難。閉ループの本丸は生成モード側なので、実装時は姉妹skill [[worker-self-verification]] を優先すること。
      【追加の実測（反証実験）】この skill の精緻な思考ムーブ（proxy同定・プレモーテム・worked example）は、汎用の「検算せよ・不確実性を正直に書け」チェックリストを**上回らなかった**（opus上の直接比較で両者ほぼ互角）。効くのは*検証を促すこと自体*であって、fable固有の精緻化ではない。→ ゲートでチェックリストを load するなら、この長い skill より**最短の verify+honest-uncertainty で足りる**ことを念頭に。真の残差は skill でなく**ルーティング**（独立した敵対者による機械再検証）で取る（`instructions/rules.md` VERIFY-001）。 -->

@@ -1,7 +1,7 @@
 {
   "name": "team-framework",
   "description": "関数ベース×ハイブリッド（前半Teams＋後半Workflow）のマルチエージェント開発体制",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "author": {
     "name": "ayuha.koyanagi"
   },

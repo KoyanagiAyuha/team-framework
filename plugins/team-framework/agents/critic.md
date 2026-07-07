@@ -5,8 +5,8 @@ model: fable
 ---
 
 <!--
-【モデル方針・fable優先／opus自動フォールバック】Criticは最も判断が重い役割のため、最上位モデルの Claude Fable 5（エイリアス fable）を優先する。
-Fable 5 は期間限定提供。利用不可（輸出管理等で停止）になったら opus にフォールバックする。
+【モデル方針・fable優先／opus自動フォールバック】Criticは最も判断が重い役割のため、Claude Fable 5（エイリアス fable）を優先する。
+fable は利用可否が変動する（サブスク提供は一時停止中・クレジットでは利用可・公式が復活表明）。利用不可時は opus にフォールバックする。
 - **後半の検証ゲート（workflows/worker-critic.mjs）は自動フォールバック実装済み**（`criticAgent` が fable の失敗を検知して opus に切替え・以後 latch）。手動でモデルを戻す必要はなく、「戻し忘れて全item落ち」の事故はもう起きない。
 - **このファイルで起動する Teams teammate（前半の設計相談）** は frontmatter が `model: fable` のため自動フォールバックが効かない。fableでのspawnが利用不可で失敗したら、Orchestrator が `opus` を明示指定して spawn し直す（skills/team/SKILL.md「コスト意識」参照）。
 -->

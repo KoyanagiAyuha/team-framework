@@ -54,8 +54,8 @@ export const meta = {
   ],
 }
 
-// 【モデル方針】Criticゲートは最も判断が重い関門のため、最上位モデルの Claude Fable 5（エイリアス fable）を優先する。
-// Fable 5 は期間限定提供。**利用不可になっても自動でフォールバックする**（下記 criticAgent）ので、手動で戻す必要はない
+// 【モデル方針】Criticゲートは最も判断が重い関門のため、Claude Fable 5（エイリアス fable）を優先する。
+// fable は利用可否が変動する（サブスク提供は一時停止中・クレジットでは利用可・公式が復活表明）。**利用不可でも自動でフォールバックする**（下記 criticAgent）ので、手動で戻す必要はない
 // ＝「fable停止時に CRITIC_MODEL を戻し忘れて全item落ち」の footgun は解消済み。
 //   - fable が判定を返さなかった item は、その場で opus に切替えて再判定する。
 //   - 一度 fable が落ちたら以後の item は opus 直行にラッチする（停止中の無駄な fable 再試行を避ける）。
@@ -109,6 +109,7 @@ async function runGate(criticPrompt, task) {
   const failing = present.filter((g) => g.v.ok === false)
   const ok = missing.length === 0 && failing.length === 0 // 全レンズが判定を返し全員okのときだけ合格
   const needsRedesign = present.some((g) => g.v.needsRedesign)
+  const repoSpecific = present.some((g) => g.v.repoSpecific) // GOTCHA-001: いずれかのレンズが固有理由なら立てる
   const minRank = present.length ? Math.min(...present.map((g) => confRank[g.v.confidence] || 2)) : 1
   const confidence = ok ? rankConf[minRank] : rankConf[Math.min(minRank, 2)] // 不合格/未完で「高」は名乗らせない
   const issues = [
@@ -120,7 +121,7 @@ async function runGate(criticPrompt, task) {
     (missing.length ? `・${missing.length}レンズ未完` : '') +
     (failing.length ? `・不合格レンズ: ${failing.map((g) => g.lens).join(',')}` : '') +
     '（fail-closed: 全レンズ合格時のみpass）'
-  return { ok, needsRedesign, confidence, summary, issues }
+  return { ok, needsRedesign, repoSpecific, confidence, summary, issues }
 }
 
 // 収集役は判断ゼロのシェル作業なので最も安いモデル・低effortで固定する（判定はしない）。
@@ -240,6 +241,7 @@ const VERDICT = {
     confidence: { type: 'string', enum: ['高', '中', '低'] },
     summary: { type: 'string' },
     issues: { type: 'array', items: { type: 'string' }, description: '問題点と改善案' },
+    repoSpecific: { type: 'boolean', description: '却下理由がこのリポジトリ固有（汎用バグでなく「このプロジェクトでは X が Y を壊す」型）ならtrue。GOTCHA-001の学習ループ用——Orchestratorが .claude/team-gotchas.md に追記する手がかり。汎用的な失敗ならfalse。' },
   },
   required: ['ok', 'needsRedesign', 'confidence', 'summary'],
 }
@@ -263,6 +265,7 @@ const results = await pipeline(
         `スコープ: ${task.scope}`,
         `対象ファイル: ${(task.files || []).join(', ') || '(指定なし)'}`,
         '制約: スコープ外のファイルは作らない・触らない。設計判断が割れる箇所は勝手に決めず outOfScope に記す。',
+        '着手前（GOTCHA-001・任意）: リポジトリに `.claude/team-gotchas.md` があれば Read し、**担当ファイルの scope に一致する項目だけ**目を通す（このコードベース固有の落とし穴カタログ）。無ければ何もしない・カタログ全体を前提にしない。',
         '自己検証（完了前に必ず／`worker-self-verification` skill の要領）: (i) 依頼者の受け入れ例は逐語でテスト化したか、(ii) 「必ず/最小/N未満では起きない」等、実際に走査していない範囲を断言していないか（断言するなら確かめた範囲に閉じる）。green は Class A（仕様の例）で立っているか Class B（自作テスト）だけかを一度問うこと。',
         worklist.worktree
           ? '完了後 `git rev-parse --show-toplevel` を実行し、その絶対パスを worktreeRoot に必ず入れること（後続の検証がこのツリーを読む）。'
@@ -370,6 +373,7 @@ const results = await pipeline(
         evidenceBlock,
         '',
         '仕様違反・未処理エッジケース・申告との食い違い・テスト失敗(exit≠0)があれば ok=false。設計を作り直すべきなら needsRedesign=true（前半の再計画へ）。issues に具体的根拠（行・実測挙動）を書く。',
+        '却下理由が**このリポジトリ固有**（汎用バグでなく「このコードベースでは X が Y を壊す」型＝この設定/歴史的経緯/隠れ依存ゆえ）なら repoSpecific=true（GOTCHA-001学習ループ用）。どのリポジトリでも成り立つ汎用的失敗なら false。',
       ]
         .filter(Boolean)
         .join('\n')
@@ -400,8 +404,8 @@ return {
   // confidence を全itemに露出する（SKILL.mdのエスケープ弁「confidence=低なら前半へ戻す」を実装可能にする）。
   // sizeNote は「合格したが大きめ＝次スライスで分割検討」の助言（あるときだけ載る。強制ではない）。
   passed: passed.map((r) => ({ id: r.task.id, summary: r.impl?.summary, files: r.impl?.changedFiles, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
-  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
-  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary, confidence: r.verdict?.confidence, ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
+  flagged: flagged.map((r) => ({ id: r.task.id, why: r.verdict?.summary, issues: r.verdict?.issues, confidence: r.verdict?.confidence, ...(r.verdict?.repoSpecific ? { repoSpecific: true } : {}), ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
+  failed: failed.map((r) => ({ id: r.task.id, issues: r.verdict?.issues, summary: r.verdict?.summary, confidence: r.verdict?.confidence, ...(r.verdict?.repoSpecific ? { repoSpecific: true } : {}), ...(r.sizeNote ? { sizeNote: r.sizeNote } : {}), ...wt(r) })),
   // worktree使用時の後片付け案内
   ...(worklist.worktree
     ? { note: '隔離worktreeは変更があると自動削除されない。各itemの worktreeRoot から変更を回収し、完了後 `git worktree remove <worktreeRoot>` で掃除すること。' }
